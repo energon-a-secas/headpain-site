@@ -1,0 +1,11 @@
+# HeadMap
+
+> Map head pain on an interactive 3D head — intensity, depth, notes, local episode diary, JSON export, fully private
+
+- Live: https://headmap.neorgon.com/
+- Part of the Neorgon tool suite (free, no signup, runs in your browser): https://neorgon.com/
+
+## More Neorgon tools
+
+- [Neorgon hub](https://neorgon.com/): Browse and launch every tool from one page.
+- [Full suite index](https://neorgon.com/llms.txt): Machine-readable list of every Neorgon tool.
