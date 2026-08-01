@@ -3,25 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HeadMap | Map head pain on a 3D head, local and private</title>
+  <title>HeadPain | Map head pain on a 3D head, local and private</title>
   <meta name="description" content="Pinpoint head pain on an interactive 3D head — intensity, depth, spread, and notes per point. Compare with published headache patterns, keep a local episode diary, export JSON. Nothing leaves your browser.">
-  <meta property="og:title" content="HeadMap | Map head pain on a 3D head">
+  <meta property="og:title" content="HeadPain | Map head pain on a 3D head">
   <meta property="og:description" content="Pinpoint head pain on an interactive 3D head — intensity, depth, spread, and notes. Local episode diary, pattern matching, JSON export. Nothing leaves your browser.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://headmap.neorgon.com/">
+  <meta property="og:url" content="https://headpain.neorgon.com/">
   <meta property="og:site_name" content="Neorgon">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="HeadMap | Map head pain on a 3D head">
+  <meta name="twitter:title" content="HeadPain | Map head pain on a 3D head">
   <meta name="twitter:description" content="Pinpoint head pain on an interactive 3D head. Local diary, pattern matching, JSON export — nothing leaves your browser.">
   <meta name="robots" content="index, follow">
-  <link rel="canonical" href="https://headmap.neorgon.com/">
+  <link rel="canonical" href="https://headpain.neorgon.com/">
   <meta property="og:locale" content="en_US">
   <meta name="theme-color" content="#040714">
-  <meta property="og:image" content="https://headmap.neorgon.com/og-preview.png">
+  <meta property="og:image" content="https://headpain.neorgon.com/og-preview.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="stylesheet" href="css/style.css">
+  <!-- Neorgon Header Kit (vendored; ?header=live swaps CSS to CDN) -->
+  <script>(function(){var m=location.search.match(/[?&]theme=([\w-]+)/)||document.cookie.match(/(?:^|;\s*)neo_theme=([\w-]+)/);if(m&&m[1]!=='default')document.documentElement.dataset.theme=decodeURIComponent(m[1]);})();</script>
+  <link rel="stylesheet" href="css/neorgon-header.css">
+  <link rel="stylesheet" href="css/neorgon-themes.css">
+  <link rel="stylesheet" href="https://pub-b597cd281a384f98a47e1f043a6c4160.r2.dev/v1.0.0/header/season.css">
+  <script defer src="js/neorgon-header.js"></script>
   <script type="importmap">
   {
     "imports": {
@@ -34,9 +40,9 @@
   {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    "name": "HeadMap",
+    "name": "HeadPain",
     "description": "Pinpoint head pain on an interactive 3D head — intensity, depth, spread, and notes per point. Local episode diary, pattern matching, JSON export.",
-    "url": "https://headmap.neorgon.com/",
+    "url": "https://headpain.neorgon.com/",
     "applicationCategory": "HealthApplication",
     "operatingSystem": "Any",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -48,27 +54,29 @@
 
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="header-bar">
+  <header class="header-bar" data-header-mode="app">
     <div class="header-logo">
       <a href="https://neorgon.com/" target="_blank" rel="noopener noreferrer">
         <img src="energon-classic-logo.png" class="header-logo-img" alt="Neorgon logo">
       </a>
       <a href="./" class="header-title-link">
-        <h1>HeadMap</h1>
+        <h1>HeadPain</h1>
         <div class="header-subtitle">Map head pain, locally and privately</div>
       </a>
     </div>
-    <a class="header-home" href="https://neorgon.com/" title="neorgon.com" aria-label="Neorgon home">
-      <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-      </svg>
-    </a>
+    <div class="header-right">
+      <a class="header-home" href="https://neorgon.com/" title="neorgon.com" aria-label="Neorgon home">
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+        </svg>
+      </a>
+    </div>
   </header>
 
   <main id="main" class="app-frame">
     <div class="disclaimer-strip" role="note">
       <span class="disclaimer-icon" aria-hidden="true">!</span>
-      <span>HeadMap helps you describe pain — it cannot diagnose. Sudden or worst-ever headache is an emergency.</span>
+      <span>HeadPain helps you describe pain — it cannot diagnose. Sudden or worst-ever headache is an emergency.</span>
     </div>
 
     <div class="app-layout">
@@ -94,11 +102,19 @@
         <div class="tabs" role="tablist" aria-label="Panels">
           <button type="button" class="tab active" id="tab-map" role="tab" aria-selected="true" aria-controls="panel-map">Map</button>
           <button type="button" class="tab" id="tab-conditions" role="tab" aria-selected="false" aria-controls="panel-conditions">Conditions</button>
+          <button type="button" class="tab" id="tab-demos" role="tab" aria-selected="false" aria-controls="panel-demos">Demos</button>
           <button type="button" class="tab" id="tab-episodes" role="tab" aria-selected="false" aria-controls="panel-episodes">Episodes</button>
         </div>
 
         <section id="panel-map" class="tabpanel active" role="tabpanel" aria-labelledby="tab-map" tabindex="0">
           <div id="editor"></div>
+          <div class="panel-block">
+            <div class="panel-block-head">
+              <h2>Groups <span class="pill" id="groups-count">0</span></h2>
+              <button type="button" class="btn btn--ghost btn--sm" id="btn-new-group">New group</button>
+            </div>
+            <div id="groups"></div>
+          </div>
           <div class="panel-block">
             <div class="panel-block-head">
               <h2>Points <span class="pill" id="points-count">0</span></h2>
@@ -118,6 +134,10 @@
           <div id="library"></div>
         </section>
 
+        <section id="panel-demos" class="tabpanel" role="tabpanel" aria-labelledby="tab-demos" tabindex="0">
+          <div id="demos"></div>
+        </section>
+
         <section id="panel-episodes" class="tabpanel" role="tabpanel" aria-labelledby="tab-episodes" tabindex="0">
           <div id="episodes"></div>
         </section>
@@ -130,7 +150,7 @@
 
   <footer class="info-footer">
     <div class="footer-disclaimer">
-      HeadMap is for communication only and does not provide medical advice. If you have severe or sudden symptoms, seek care immediately.
+      HeadPain is for communication only and does not provide medical advice. If you have severe or sudden symptoms, seek care immediately.
     </div>
     <div class="footer-attribution">
       Head model based on the <a class="footer-link" href="assets/LeePerrySmith_License.txt" target="_blank" rel="noopener">Lee Perry-Smith / Infinite 3D Head Scan</a>, used under CC-BY 3.0.

@@ -4,28 +4,35 @@ import {
   state, activeEpisode, absorbShared, saveToStorage,
   addMarker, updateMarker, removeMarker, clearMarkers, selectMarker,
   createEpisode, loadEpisode, deleteEpisode, renameEpisode, replaceMarkers,
+  addGroup, renameGroup, setGroupColor, removeGroup, clearGroups, setActiveGroup,
   setView, setCamera, importJson
 } from './state.js';
 import { CONDITIONS, presetMarkers } from './conditions.js';
+import { DEMOS } from './demos.js';
+import { cycleColor } from './groups.js';
 import { renderAll } from './render.js';
 import { renderZoneBrowser } from './editor.js';
 import { renderRedFlags, renderLibrary } from './panel-conditions.js';
+import { renderDemos } from './panel-demos.js';
 import { exportEpisodeJson, exportAllJson, buildShareUrl, downloadPng } from './export.js';
 import { $, debounce, safeJsonParse } from './utils.js';
 
 const WHOLE_HEAD_SPOT = { p: [0, 0.2, 0.95], n: [0, 0, 1] };
+const TABS = ['map', 'conditions', 'demos', 'episodes'];
 
 export function initApp(ctx) {
   const { head, registry } = ctx;
   ctx.ui = { hoverZoneId: null };
   ctx.els = {
-    editor: $('#editor'), points: $('#points'), pointsCount: $('#points-count'),
+    editor: $('#editor'), groups: $('#groups'), groupsCount: $('#groups-count'),
+    points: $('#points'), pointsCount: $('#points-count'),
     zones: $('#zones'), matches: $('#matches'), redflags: $('#redflags'),
-    library: $('#library'), episodes: $('#episodes'),
+    library: $('#library'), demos: $('#demos'), episodes: $('#episodes'),
     stage: $('#stage'), stageLoader: $('#stage-loader'), stageFallback: $('#stage-fallback'),
     tooltip: $('#zone-tooltip'), stageHint: $('#stage-hint'),
     btnXray: $('#btn-xray'), btnResetView: $('#btn-reset-view'), btnPng: $('#btn-png'),
-    btnClear: $('#btn-clear-points'), toast: $('#toast'), importFile: $('#import-file')
+    btnClear: $('#btn-clear-points'), btnNewGroup: $('#btn-new-group'),
+    toast: $('#toast'), importFile: $('#import-file')
   };
   const els = ctx.els;
 
@@ -45,6 +52,20 @@ export function initApp(ctx) {
     renderAll(ctx);
   }
 
+  // Resolve zone-based partial markers to 3D spots on this model.
+  function materializeSpots(list) {
+    const out = [];
+    for (const m of list || []) {
+      const zone = registry.zoneById(m.zoneId);
+      if (!zone) continue; // zone not on this model — skip rather than misplace
+      const spot = zone.virtual || !zone.anchor ? WHOLE_HEAD_SPOT : { p: [...zone.anchor], n: [...zone.normal] };
+      out.push({ ...m, p: spot.p, n: spot.n });
+    }
+    return out;
+  }
+
+  const shortName = name => name.split(/ [—(]/)[0];
+
   // ── Actions (used by every panel) ─────────────────────────────────────────
   ctx.actions = {
     renderAll: () => renderAll(ctx),
@@ -62,7 +83,7 @@ export function initApp(ctx) {
       if (opts.render === false) {
         if (!opts.skipHead) {
           const ep = activeEpisode();
-          head.sync(ep.markers, state.selectedMarkerId, ctx.ui.hoverZoneId);
+          head.sync(ep.markers, state.selectedMarkerId, ctx.ui.hoverZoneId, ep.groups, state.activeGroupId);
         }
       } else {
         renderAll(ctx);
@@ -96,19 +117,85 @@ export function initApp(ctx) {
       mutate(() => addMarker({ zoneId: hit.zone.id, p: hit.p, n: hit.n }));
     },
 
+    // ── Groups ──────────────────────────────────────────────────────────────
+    newGroup() {
+      let g;
+      mutate(() => {
+        g = addGroup({});
+        setActiveGroup(g.id);
+      });
+      toast(`“${g.name}” created — new points join it while it's focused`);
+    },
+
+    toggleGroupFocus(id) {
+      setActiveGroup(state.activeGroupId === id ? null : id);
+      renderAll(ctx);
+    },
+
+    renameGroup(id, name) {
+      mutate(() => renameGroup(id, name));
+    },
+
+    cycleGroupColor(id) {
+      const g = activeEpisode()?.groups.find(g => g.id === id);
+      if (!g) return;
+      mutate(() => setGroupColor(id, cycleColor(g.color)));
+    },
+
+    deleteGroup(id) {
+      const ep = activeEpisode();
+      const g = ep?.groups.find(g => g.id === id);
+      if (!g) return;
+      const count = ep.markers.filter(m => m.groupId === id).length;
+      if (count && !confirm(`Delete group "${g.name}"? Its ${count} point${count === 1 ? '' : 's'} stay on the map, ungrouped.`)) return;
+      mutate(() => removeGroup(id));
+      toast('Group deleted — points kept');
+    },
+
     applyPreset(conditionId) {
       const condition = CONDITIONS.find(c => c.id === conditionId);
       if (!condition || condition.notMappable) return;
-      const markers = [];
-      for (const m of presetMarkers(condition)) {
-        const zone = registry.zoneById(m.zoneId);
-        if (!zone) continue; // zone not on this model — skip rather than misplace
-        const spot = zone.virtual || !zone.anchor ? WHOLE_HEAD_SPOT : { p: [...zone.anchor], n: [...zone.normal] };
-        markers.push({ ...m, p: spot.p, n: spot.n });
-      }
-      mutate(() => replaceMarkers(markers));
+      const markers = materializeSpots(presetMarkers(condition));
+      mutate(() => {
+        clearGroups();
+        replaceMarkers(markers);
+      });
       ctx.actions.setTab('map');
       toast(`Loaded ${markers.length} starting points — now adjust them to YOUR pain`);
+    },
+
+    applyPresetAsGroup(conditionId) {
+      const condition = CONDITIONS.find(c => c.id === conditionId);
+      if (!condition || condition.notMappable) return;
+      const spots = materializeSpots(presetMarkers(condition));
+      if (!spots.length) return;
+      let g;
+      mutate(() => {
+        g = addGroup({ name: shortName(condition.name), conditionId: condition.id });
+        for (const m of spots) addMarker({ ...m, groupId: g.id });
+        state.selectedMarkerId = null;
+        setActiveGroup(g.id);
+      });
+      ctx.actions.setTab('map');
+      toast(`“${g.name}” group added — ${spots.length} points; now adjust them to YOUR pain`);
+    },
+
+    loadDemo(demoId) {
+      const demo = DEMOS.find(d => d.id === demoId);
+      if (!demo) return;
+      mutate(() => {
+        const ep = createEpisode(demo.title);
+        for (const gd of demo.groups) {
+          const g = addGroup({ name: gd.name, color: gd.color, conditionId: gd.conditionId || null });
+          const condition = gd.conditionId ? CONDITIONS.find(c => c.id === gd.conditionId) : null;
+          const spots = materializeSpots(condition ? presetMarkers(condition) : gd.markers);
+          for (const m of spots) addMarker({ ...m, groupId: g.id });
+        }
+        state.selectedMarkerId = null;
+        setActiveGroup(ep.groups[0]?.id || null);
+      });
+      ctx.actions.setTab('map');
+      toast('Demo loaded as a new episode — click a group to focus it');
     },
 
     newEpisode() {
@@ -152,7 +239,7 @@ export function initApp(ctx) {
       file.text().then(text => {
         const payload = safeJsonParse(text, null);
         const count = payload ? importJson(payload) : 0;
-        if (!count) { toast('No HeadMap episodes found in that file'); return; }
+        if (!count) { toast('No HeadPain episodes found in that file'); return; }
         absorbShared();
         saveToStorage();
         renderAll(ctx);
@@ -178,7 +265,7 @@ export function initApp(ctx) {
     },
 
     setTab(name) {
-      for (const tab of ['map', 'conditions', 'episodes']) {
+      for (const tab of TABS) {
         const active = tab === name;
         $(`#tab-${tab}`).classList.toggle('active', active);
         $(`#tab-${tab}`).setAttribute('aria-selected', String(active));
@@ -217,8 +304,9 @@ export function initApp(ctx) {
   els.btnResetView.addEventListener('click', () => ctx.actions.resetView());
   els.btnPng.addEventListener('click', () => ctx.actions.snapshot());
   els.btnClear.addEventListener('click', () => ctx.actions.clearPoints());
+  els.btnNewGroup.addEventListener('click', () => ctx.actions.newGroup());
 
-  for (const tab of ['map', 'conditions', 'episodes']) {
+  for (const tab of TABS) {
     $(`#tab-${tab}`).addEventListener('click', () => ctx.actions.setTab(tab));
   }
 
@@ -253,7 +341,7 @@ export function initApp(ctx) {
       .catch(err => {
         els.stageLoader.hidden = true;
         els.stageFallback.hidden = false;
-        console.error('HeadMap 3D failed:', err);
+        console.error('HeadPain 3D failed:', err);
       });
   }
 
@@ -261,5 +349,6 @@ export function initApp(ctx) {
   renderZoneBrowser(els.zones, ctx);
   renderRedFlags(els.redflags);
   renderLibrary(els.library, ctx);
+  renderDemos(els.demos, ctx);
   renderAll(ctx);
 }

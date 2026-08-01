@@ -18,9 +18,9 @@ export function escHtml(str) {
   return div.innerHTML;
 }
 
-export function intensityColor(value) {
-  // 0 = transparent/empty; 1-2 light pink; 3-5 red; 6-8 crimson; 9-10 deep crimson
-  if (value <= 0) return 'rgba(200,200,200,0.2)';
+export function intensityRGB(value) {
+  // 0 = grey; 1-2 light pink; 3-5 red; 6-8 crimson; 9-10 deep crimson
+  if (value <= 0) return [200, 200, 200];
   const ramp = [
     { v: 1, c: [255, 204, 204] },
     { v: 3, c: [255, 102, 102] },
@@ -38,9 +38,16 @@ export function intensityColor(value) {
     }
   }
   const t = value === lower.v ? 0 : (value - lower.v) / (upper.v - lower.v);
-  const r = Math.round(lerp(lower.c[0], upper.c[0], t));
-  const g = Math.round(lerp(lower.c[1], upper.c[1], t));
-  const b = Math.round(lerp(lower.c[2], upper.c[2], t));
+  return [
+    Math.round(lerp(lower.c[0], upper.c[0], t)),
+    Math.round(lerp(lower.c[1], upper.c[1], t)),
+    Math.round(lerp(lower.c[2], upper.c[2], t))
+  ];
+}
+
+export function intensityColor(value) {
+  if (value <= 0) return 'rgba(200,200,200,0.2)';
+  const [r, g, b] = intensityRGB(value);
   return `rgb(${r}, ${g}, ${b})`;
 }
 

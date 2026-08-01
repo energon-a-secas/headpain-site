@@ -8,10 +8,15 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildLut, pickZone } from './picking.js';
 import { createZoneShader } from './zoneshader.js';
 import { MarkerLayer } from './markers.js';
+import { intensityRGB } from './utils.js';
+import { hexToRgb } from './groups.js';
 
 const CAM_TARGET = new THREE.Vector3(0, -0.55, 0);
 const DEFAULT_CAMERA = { theta: 0, phi: Math.PI / 2, dist: 4.9 };
 const SKIN_COLOR = 0xd9ac8c;
+const HOVER_TINT = [0.07, 0.72, 0.51];
+const SELECT_TINT = [0.10, 0.86, 0.61];
+const FOCUS_DIM = 0.25; // zone-tint strength multiplier outside the focused group
 
 function unsupportedStub(reason) {
   return {
@@ -67,7 +72,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
   let markerLayer = null;
   let lut = null;
 
-  const view = { markers: [], selectedId: null, hoverZoneId: null, xray: false };
+  const view = { markers: [], selectedId: null, hoverZoneId: null, xray: false, groups: [], activeGroupId: null };
   const api = {
     supported: true,
     ready: null,
@@ -79,32 +84,50 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
   function applyZoneStates() {
     if (!zoneShader) return;
     zoneShader.clearAll();
-    const perZone = new Map(); // index -> {intensity, active, hover, selected}
+    const groupTint = new Map(); // groupId -> [r,g,b] 0..1
+    for (const g of view.groups) groupTint.set(g.id, hexToRgb(g.color).map(v => v / 255));
+    const tintOf = m => groupTint.get(m.groupId) || intensityRGB(m.intensity).map(v => v / 255);
+
+    const perZone = new Map(); // index -> {intensity, tint, active, hover, selected, inFocus}
     const entry = i => {
-      if (!perZone.has(i)) perZone.set(i, { intensity: 0, active: false, hover: false, selected: false });
+      if (!perZone.has(i)) perZone.set(i, { intensity: 0, tint: null, active: false, hover: false, selected: false, inFocus: false });
       return perZone.get(i);
     };
     for (const m of view.markers) {
       const i = registry.zoneIndexOf(m.zoneId);
       if (i < 1) continue;
       const e = entry(i);
-      e.intensity = Math.max(e.intensity, m.intensity);
       e.active = true;
+      if (m.intensity >= e.intensity) { e.intensity = m.intensity; e.tint = tintOf(m); }
       if (m.id === view.selectedId) e.selected = true;
+      if (!view.activeGroupId || m.groupId === view.activeGroupId) e.inFocus = true;
     }
     if (view.hoverZoneId) {
       const i = registry.zoneIndexOf(view.hoverZoneId);
       if (i >= 1) entry(i).hover = true;
     }
-    for (const [i, e] of perZone) zoneShader.setZoneState(i, e);
+    for (const [i, e] of perZone) {
+      if (e.selected) zoneShader.setZoneState(i, { color: SELECT_TINT, strength: 0.45 });
+      else if (e.hover) zoneShader.setZoneState(i, { color: HOVER_TINT, strength: 0.30 });
+      else if (e.active && e.intensity > 0 && e.tint) {
+        zoneShader.setZoneState(i, {
+          color: e.tint,
+          strength: (0.26 + 0.04 * e.intensity) * (e.inFocus ? 1 : FOCUS_DIM)
+        });
+      }
+    }
     requestRender();
   }
 
-  api.sync = (markers, selectedId, hoverZoneId) => {
+  api.sync = (markers, selectedId, hoverZoneId, groups = [], activeGroupId = null) => {
     view.markers = markers || [];
     view.selectedId = selectedId || null;
     view.hoverZoneId = hoverZoneId || null;
-    if (markerLayer) markerLayer.sync(view.markers, view.selectedId);
+    view.groups = groups || [];
+    view.activeGroupId = activeGroupId || null;
+    const groupColors = {};
+    for (const g of view.groups) groupColors[g.id] = g.color;
+    if (markerLayer) markerLayer.sync(view.markers, view.selectedId, groupColors, view.activeGroupId);
     applyZoneStates();
   };
 
@@ -268,7 +291,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
     zoneShader = createZoneShader(skinMaterial, registry.atlasImage, registry.atlasSize);
     markerLayer = new MarkerLayer(headMesh, scene);
 
-    api.sync(view.markers, view.selectedId, view.hoverZoneId);
+    api.sync(view.markers, view.selectedId, view.hoverZoneId, view.groups, view.activeGroupId);
     if (view.xray) api.setXray(true);
     setCamera(DEFAULT_CAMERA.theta, DEFAULT_CAMERA.phi, DEFAULT_CAMERA.dist);
   });

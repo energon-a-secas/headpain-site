@@ -1,5 +1,6 @@
 // Pain markers — DecalGeometry core+halo that hug the head surface, plus depth
-// encodings (ring for muscle, inward column for deep, pulsing core for inside).
+// encodings (ring for muscle, inward column for deep, pulsing core for inside)
+// and a long nail-spike for ice-pick stabs that reads best in x-ray view.
 // The head mesh sits at the origin with identity transform, so head-local == world.
 
 import * as THREE from 'three';
@@ -8,6 +9,7 @@ import { intensityColor } from './utils.js';
 import { spreadById } from './zones.js';
 
 const MAX_MARKERS = 60;
+const DIM_FACTOR = 0.22; // opacity multiplier for markers outside the focused group
 
 function gradientCanvas(draw) {
   const c = document.createElement('canvas');
@@ -89,7 +91,11 @@ export class MarkerLayer {
     };
     this.columnGeom = new THREE.CylinderGeometry(0.045, 0.045, 1, 12, 1, true);
     this.columnGeom.translate(0, -0.5, 0); // origin at skin, extends down -y before orientation
-    this.items = []; // { root, disposables, pulseMat, phase }
+    // Nail-spike for ice-pick: wide at the skin, tip driven deep inside.
+    this.spikeGeom = new THREE.ConeGeometry(0.06, 1, 12, 1, true);
+    this.spikeGeom.rotateX(Math.PI);      // apex now points -y
+    this.spikeGeom.translate(0, -0.5, 0); // base at origin (skin), tip extends inward
+    this.items = []; // { root, disposables, pulseMat, phase, dim }
     this.decalMats = []; // { mat, base, role } — faded in x-ray so deep columns read clearly
     this.xray = false;
   }
@@ -131,9 +137,9 @@ export class MarkerLayer {
     }
   }
 
-  addColumn(marker, color, length, opacity) {
+  addColumn(marker, color, length, opacity, geom = this.columnGeom) {
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
-    const mesh = new THREE.Mesh(this.columnGeom, mat);
+    const mesh = new THREE.Mesh(geom, mat);
     const p = new THREE.Vector3(...marker.p);
     const n = new THREE.Vector3(...marker.n);
     mesh.position.copy(p);
@@ -142,20 +148,21 @@ export class MarkerLayer {
     return { mesh, disposables: [mat] };
   }
 
-  sync(markers, selectedId) {
+  sync(markers, selectedId, groupColors = {}, activeGroupId = null) {
     this.clear();
     const capped = markers.slice(0, MAX_MARKERS);
     for (const marker of capped) {
       const root = new THREE.Group();
       const disposables = [];
-      const color = new THREE.Color(intensityColor(marker.intensity));
+      const color = new THREE.Color(groupColors[marker.groupId] || intensityColor(marker.intensity));
+      const dim = activeGroupId && marker.groupId !== activeGroupId ? DIM_FACTOR : 1;
       const spreadRadius = spreadById(marker.spread).radius;
       const coreSize = Math.max(0.16, spreadRadius * 0.7);
       const haloSize = spreadRadius * 1.6;
-      const baseOpacity = 0.45 + marker.intensity * 0.05;
+      const baseOpacity = (0.45 + marker.intensity * 0.05) * dim;
 
       // halo (all markers)
-      const halo = this.addDecal(marker, this.tex.halo, color, haloSize, 0.3 + marker.intensity * 0.04, 'halo');
+      const halo = this.addDecal(marker, this.tex.halo, color, haloSize, (0.3 + marker.intensity * 0.04) * dim, 'halo');
       root.add(halo.mesh); disposables.push(...halo.disposables);
 
       // core (spiky variant for electric/stabbing qualities)
@@ -165,13 +172,18 @@ export class MarkerLayer {
 
       let pulseMat = null;
       if (marker.depth === 'muscle') {
-        const ring = this.addDecal(marker, this.tex.ring, color, coreSize * 1.5, 0.5, 'ring');
+        const ring = this.addDecal(marker, this.tex.ring, color, coreSize * 1.5, 0.5 * dim, 'ring');
         root.add(ring.mesh); disposables.push(...ring.disposables);
+      }
+      if (marker.quality === 'ice-pick') {
+        // The nail: a long spike driven into the skull, the star of x-ray view.
+        const spike = this.addColumn(marker, color, 1.15, 0.9 * dim, this.spikeGeom);
+        root.add(spike.mesh); disposables.push(...spike.disposables);
       } else if (marker.depth === 'deep-pressure') {
-        const col = this.addColumn(marker, color, 0.35, 0.8);
+        const col = this.addColumn(marker, color, 0.35, 0.8 * dim);
         root.add(col.mesh); disposables.push(...col.disposables);
       } else if (marker.depth === 'inside-head') {
-        const col = this.addColumn(marker, color, 0.5, 0.85);
+        const col = this.addColumn(marker, color, 0.5, 0.85 * dim);
         root.add(col.mesh); disposables.push(...col.disposables);
         pulseMat = core.mesh.material;
       }
@@ -184,7 +196,7 @@ export class MarkerLayer {
       }
 
       this.group.add(root);
-      this.items.push({ root, disposables, pulseMat, phase: (marker.p[0] * 7 + marker.p[1] * 13) % (Math.PI * 2) });
+      this.items.push({ root, disposables, pulseMat, phase: (marker.p[0] * 7 + marker.p[1] * 13) % (Math.PI * 2), dim });
     }
   }
 
@@ -195,7 +207,7 @@ export class MarkerLayer {
     for (const item of this.items) {
       if (!item.pulseMat) continue;
       animating = true;
-      item.pulseMat.opacity = (0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3 + item.phase))) * fade;
+      item.pulseMat.opacity = (0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3 + item.phase))) * fade * item.dim;
     }
     return animating;
   }
@@ -203,6 +215,7 @@ export class MarkerLayer {
   dispose() {
     this.clear();
     this.columnGeom.dispose();
+    this.spikeGeom.dispose();
     Object.values(this.tex).forEach(t => t.dispose());
   }
 }
