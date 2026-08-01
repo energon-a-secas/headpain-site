@@ -1,4 +1,4 @@
-// HeadMap zone catalog — single source of truth for surface zones and pain attributes.
+// HeadPain zone catalog — single source of truth for surface zones and pain attributes.
 //
 // Authoring format (consumed by tools/bake-zones.mjs):
 //   hint     — rough 3D point in RAW GLB coordinates, snapped onto the mesh at bake time

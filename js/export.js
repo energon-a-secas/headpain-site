@@ -22,11 +22,11 @@ function download(filename, text, type = 'application/json') {
 }
 
 export function exportEpisodeJson(ep) {
-  download(`headmap-${slug(ep.title)}-${stamp()}.json`, JSON.stringify(episodeToJson(ep), null, 2));
+  download(`headpain-${slug(ep.title)}-${stamp()}.json`, JSON.stringify(episodeToJson(ep), null, 2));
 }
 
 export function exportAllJson() {
-  download(`headmap-diary-${stamp()}.json`, JSON.stringify(allToJson(), null, 2));
+  download(`headpain-diary-${stamp()}.json`, JSON.stringify(allToJson(), null, 2));
 }
 
 export function buildShareUrl(zoneIndexOf) {
@@ -38,6 +38,6 @@ export function buildShareUrl(zoneIndexOf) {
 export function downloadPng(dataUrl, title) {
   const a = document.createElement('a');
   a.href = dataUrl;
-  a.download = `headmap-${slug(title)}-${stamp()}.png`;
+  a.download = `headpain-${slug(title)}-${stamp()}.png`;
   a.click();
 }

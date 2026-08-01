@@ -1,4 +1,4 @@
-// HeadMap entry point — load the zone registry, restore state, wire the app.
+// HeadPain entry point — load the zone registry, restore state, wire the app.
 
 import { loadRegistry } from './registry.js';
 import { createHead3D } from './head3d.js';
@@ -24,7 +24,7 @@ async function boot() {
 }
 
 boot().catch(err => {
-  console.error('HeadMap failed to start:', err);
+  console.error('HeadPain failed to start:', err);
   const loader = $('#stage-loader');
-  if (loader) loader.innerHTML = '<span>HeadMap could not load its assets. Check the console.</span>';
+  if (loader) loader.innerHTML = '<span>HeadPain could not load its assets. Check the console.</span>';
 });

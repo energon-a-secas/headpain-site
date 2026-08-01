@@ -1,4 +1,4 @@
-// HeadMap condition library + transparent pattern matcher.
+// HeadPain condition library + transparent pattern matcher.
 // Content follows ICHD-3 patterns (ichd-3.org) and is educational — never diagnostic.
 // Zone ids reference assets/zones.baked.json (see js/zones.js).
 
@@ -242,7 +242,7 @@ export const CONDITIONS = [
 // ---------------------------------------------------------------------------
 
 export const MATCHER_DISCLAIMER =
-  'HeadMap compares your map with published headache patterns. It cannot diagnose you. ' +
+  'HeadPain compares your map with published headache patterns. It cannot diagnose you. ' +
   'Many different conditions share the same locations, and real people rarely match textbooks exactly. ' +
   'Use this to describe your pain to a clinician — not to rule anything in or out.';
 

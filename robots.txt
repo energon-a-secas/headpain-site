@@ -22,4 +22,4 @@ Allow: /
 User-agent: anthropic-ai
 Allow: /
 
-Sitemap: https://headmap.neorgon.com/sitemap.xml
+Sitemap: https://headpain.neorgon.com/sitemap.xml
