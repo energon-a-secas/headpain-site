@@ -7,7 +7,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HeadPain | Map head pain on a 3D head, local and private</title>
-  <meta name="description" content="Pinpoint head pain on an interactive 3D head — intensity, depth, spread, and notes per point. Compare with published headache patterns, keep a local episode diary, export JSON. Nothing leaves your browser.">
+  <meta name="description" content="Pinpoint head pain on a 3D head: intensity, depth, spread, and notes per point. Compare with published headache patterns, keep a local episode diary, export JSON. Nothing leaves your browser.">
   <meta property="og:title" content="HeadPain | Map head pain on a 3D head">
   <meta property="og:description" content="Pinpoint head pain on an interactive 3D head — intensity, depth, spread, and notes. Local episode diary, pattern matching, JSON export. Nothing leaves your browser.">
   <meta property="og:type" content="website">
@@ -31,6 +31,8 @@
   <link rel="stylesheet" href="css/neorgon-themes.css">
   <link rel="stylesheet" href="https://cdn.neorgon.org/v1.0.0/header/season.css">
   <script defer src="js/neorgon-header.js"></script>
+  <link rel="stylesheet" href="css/neorgon-footer.css">
+  <script defer src="js/neorgon-footer.js"></script>
   <script type="importmap">
   {
     "imports": {
@@ -151,15 +153,8 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
 
-  <footer class="info-footer">
-    <div class="footer-disclaimer">
-      HeadPain is for communication only and does not provide medical advice. If you have severe or sudden symptoms, seek care immediately.
-    </div>
-    <div class="footer-attribution">
-      Head model based on the <a class="footer-link" href="assets/LeePerrySmith_License.txt" target="_blank" rel="noopener">Lee Perry-Smith / Infinite 3D Head Scan</a>, used under CC-BY 3.0.
-      Your data stays in this browser (localStorage) — export JSON to back it up.
-    </div>
-    <div>Part of <a class="footer-link" href="https://neorgon.com/">Neorgon</a></div>
+  <footer class="neo-footer" data-footer-mode="minimal">
+    HeadPain is for communication only and does not provide medical advice. If you have severe or sudden symptoms, seek care immediately. Head model based on the Lee Perry-Smith / Infinite 3D Head Scan, used under CC-BY 3.0. Your data stays in this browser (localStorage) — export JSON to back it up.
   </footer>
 
   <script type="module" src="js/app.js"></script>
