@@ -24,6 +24,7 @@
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  <link rel="stylesheet" href="https://cdn.neorgon.org/v1.0.0/styles/base.css">
   <link rel="stylesheet" href="css/style.css">
   <!-- Neorgon Header Kit (vendored; ?header=live swaps CSS to CDN) -->
   <script>(function(){var m=location.search.match(/[?&]theme=([\w-]+)/)||document.cookie.match(/(?:^|;\s*)neo_theme=([\w-]+)/);if(m&&m[1]!=='default')document.documentElement.dataset.theme=decodeURIComponent(m[1]);})();</script>
@@ -154,7 +155,12 @@
   <input type="file" id="import-file" accept="application/json,.json" hidden>
 
   <footer class="neo-footer" data-footer-mode="minimal">
-    HeadPain is for communication only and does not provide medical advice. If you have severe or sudden symptoms, seek care immediately. Head model based on the Lee Perry-Smith / Infinite 3D Head Scan, used under CC-BY 3.0. Your data stays in this browser (localStorage) — export JSON to back it up.
+    <strong>Not medical advice.</strong> If symptoms are severe or sudden, seek care immediately.
+    <template data-neo-disclaimer data-label="Attribution &amp; your data" data-title="About HeadPain">
+      <p>HeadPain is a <strong>communication tool</strong>. It helps you show someone where it hurts; it does not diagnose, and it does not provide medical advice. If your symptoms are severe, sudden, or unlike anything you have had before, seek care immediately rather than mapping them here.</p>
+      <p>Head model based on the Lee Perry-Smith / Infinite 3D Head Scan, used under CC-BY 3.0.</p>
+      <p>Your data stays in this browser (localStorage) and is never uploaded. Export JSON to back it up or to move it to another device.</p>
+    </template>
   </footer>
 
   <script type="module" src="js/app.js"></script>
