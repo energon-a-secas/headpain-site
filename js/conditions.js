@@ -38,7 +38,7 @@ export const CONDITIONS = [
     time: '30 minutes to 7 days; not worsened by activity; no vomiting.',
     differentiators: 'Bilateral + pressing + mild-to-moderate + "can still function" points here; throbbing or disabling severity points away.',
     redFlags: null,
-    feelsLike: 'A tight band squeezing both sides of the head — annoying but push-through-able.'
+    feelsLike: 'A tight band squeezing both sides of the head, annoying but push-through-able.'
   },
   {
     id: 'cluster-headache', name: 'Cluster headache', tier: 'common',
@@ -46,7 +46,7 @@ export const CONDITIONS = [
     secondary: ['forehead-lower-left', 'forehead-lower-right'],
     laterality: 'strict-unilateral', depths: ['deep-pressure', 'inside-head'],
     qualities: ['sharp', 'stabbing', 'burning'], intensity: [8, 10],
-    time: 'Attacks of 15–180 min, up to 8×/day, often clock-regular (nightly), in bouts lasting weeks; with same-side red watery eye, blocked/runny nose, eyelid swelling — and restlessness.',
+    time: 'Attacks of 15–180 min, up to 8×/day, often clock-regular (nightly), in bouts lasting weeks; with same-side red watery eye, blocked/runny nose, eyelid swelling, and restlessness.',
     differentiators: 'Shorter, clock-like, always the same side; the person paces rather than lying still; autonomic signs on the painful side.',
     redFlags: 'A first attack warrants medical evaluation to exclude mimics.',
     feelsLike: 'A red-hot poker behind one eye that arrives like an alarm clock and makes you pace the room.'
@@ -58,7 +58,7 @@ export const CONDITIONS = [
     laterality: 'any', depths: ['deep-pressure'],
     qualities: ['fullness', 'dull-ache'], intensity: [3, 7],
     time: 'Builds during a cold, with fever and colored nasal discharge; eases as the infection clears; worse bending forward.',
-    differentiators: 'Self-diagnosed "sinus headache" is usually migraine — in one large study of people with "sinus" headaches and no infection signs, 88% met criteria for migraine (Schreiber 2004). True sinus pain comes with fever, pus-like discharge, and a recent cold — not light sensitivity or nausea.',
+    differentiators: 'Self-diagnosed "sinus headache" is usually migraine, in one large study of people with "sinus" headaches and no infection signs, 88% met criteria for migraine (Schreiber 2004). True sinus pain comes with fever, pus-like discharge, and a recent cold, not light sensitivity or nausea.',
     redFlags: 'High fever, facial swelling, vision changes, or confusion → urgent care.',
     feelsLike: 'A heavy, full pressure behind the cheeks and forehead during a bad cold, worse when bending over.'
   },
@@ -82,7 +82,7 @@ export const CONDITIONS = [
     time: 'Paroxysmal attacks lasting seconds to minutes; a tender spot where the nerve exits the skull; brushing hair can hurt.',
     differentiators: 'Electric jabs along the back of the scalp plus a tender trigger point; continuous aching is a different pattern (think cervicogenic).',
     redFlags: null,
-    feelsLike: 'Electric zaps up the back of the head — even brushing hair hurts.'
+    feelsLike: 'Electric zaps up the back of the head: even brushing hair hurts.'
   },
   {
     id: 'tmj-dysfunction', name: 'TMJ dysfunction pain', tier: 'common',
@@ -102,7 +102,7 @@ export const CONDITIONS = [
     laterality: 'bilateral', depths: ['inside-head', 'muscle'],
     qualities: ['dull-ache', 'band-pressure'], intensity: [2, 7], diffuseTolerant: true,
     time: 'Headache ≥15 days/month in someone using acute pain medication regularly for >3 months (≥10 days/month for triptans/opioids/combinations; ≥15 for simple analgesics).',
-    differentiators: 'The diary tells the story — headache days and pill days climbing together; often worst on waking.',
+    differentiators: 'The diary tells the story: headache days and pill days climbing together; often worst on waking.',
     redFlags: null,
     feelsLike: 'A daily dull head fog that painkillers barely touch anymore.'
   },
@@ -126,7 +126,7 @@ export const CONDITIONS = [
     laterality: 'any', depths: ['deep-pressure', 'inside-head'],
     qualities: ['fullness', 'dull-ache', 'sharp'], intensity: [5, 9],
     time: 'Classically short (<5 min) occipital/suboccipital pain provoked by coughing, sneezing, or straining; many also report longer occipital pressure with neck and shoulder pain.',
-    differentiators: 'The cough/Valsalva trigger is the signature — "pain explodes at the back of my head when I cough or sneeze." Defined on MRI (cerebellar tonsils ≥5 mm below the foramen magnum); often found in adults, frequently incidental. Cough-triggered headache itself warrants imaging.',
+    differentiators: 'The cough/Valsalva trigger is the signature, "pain explodes at the back of my head when I cough or sneeze." Defined on MRI (cerebellar tonsils ≥5 mm below the foramen magnum); often found in adults, frequently incidental. Cough-triggered headache itself warrants imaging.',
     redFlags: 'Unsteady walking, swallowing/choking problems, or hand numbness/weakness → prompt neurology referral.',
     feelsLike: 'A hammer blow at the back of the skull every time you cough, sneeze, or strain.'
   },
@@ -134,8 +134,8 @@ export const CONDITIONS = [
     id: 'chiari-2', name: 'Chiari malformation type II (Arnold-Chiari)', tier: 'advanced', notMappable: true,
     primary: [], secondary: [],
     laterality: 'any', depths: [], qualities: [], intensity: [0, 0],
-    time: 'Congenital — present at birth, almost always with open spina bifida (myelomeningocele).',
-    differentiators: 'A pediatric structural malformation diagnosed in infancy — not an adult headache pattern.',
+    time: 'Congenital: present at birth, almost always with open spina bifida (myelomeningocele).',
+    differentiators: 'A pediatric structural malformation diagnosed in infancy, not an adult headache pattern.',
     redFlags: null, congenital: true,
     feelsLike: 'A condition babies are born with, usually alongside spina bifida.'
   },
@@ -144,7 +144,7 @@ export const CONDITIONS = [
     primary: [], secondary: [],
     laterality: 'any', depths: [], qualities: [], intensity: [0, 0],
     time: 'The rarest, most severe Chiari type: brain tissue herniates through a low occipital/high cervical encephalocele, visible at birth.',
-    differentiators: 'A neonatal surgical condition — never a self-checkable headache pattern.',
+    differentiators: 'A neonatal surgical condition: never a self-checkable headache pattern.',
     redFlags: null, congenital: true,
     feelsLike: 'A severe malformation diagnosed at birth as a visible sac at the back of the skull or neck.'
   },
@@ -155,7 +155,7 @@ export const CONDITIONS = [
     laterality: 'strict-unilateral', depths: ['surface'],
     qualities: ['electric', 'sharp', 'stabbing'], intensity: [8, 10],
     time: 'Paroxysms lasting a fraction of a second to 2 minutes, triggered by light touch, chewing, tooth-brushing, shaving, or cold air; pain-free between attacks.',
-    differentiators: 'Face-only, electric, and triggerable by touch — the trigger zones (beside nose, lips, gums) are nearly pathognomonic. Branch map: V1 forehead/eye (rare), V2 cheek/upper teeth, V3 jaw/chin.',
+    differentiators: 'Face-only, electric, and triggerable by touch. The trigger zones (beside nose, lips, gums) are nearly pathognomonic. Branch map: V1 forehead/eye (rare), V2 cheek/upper teeth, V3 jaw/chin.',
     redFlags: 'Onset under 40, bilateral, or with sensory loss → imaging to exclude other causes.',
     feelsLike: 'A lightning bolt in the cheek when brushing teeth or when a breeze hits the face.'
   },
@@ -188,9 +188,9 @@ export const CONDITIONS = [
     laterality: 'strict-unilateral', depths: ['inside-head', 'deep-pressure'],
     qualities: ['dull-ache', 'stabbing', 'throbbing'], intensity: [2, 9],
     time: 'Continuous, one-sided, every single day for >3 months, with moderate-to-severe flares; specialists confirm it via complete response to indomethacin.',
-    differentiators: 'The continuity — "one side of my head has hurt every day for months" — separates it from every episodic condition.',
+    differentiators: 'The continuity: "one side of my head has hurt every day for months", separates it from every episodic condition.',
     redFlags: 'Any new continuous one-sided headache merits clinician review.',
-    feelsLike: 'One side of the head aches 24/7 and sometimes spikes — it never fully stops.'
+    feelsLike: 'One side of the head aches 24/7 and sometimes spikes. It never fully stops.'
   },
   {
     id: 'primary-stabbing-headache', name: 'Primary stabbing headache ("ice-pick")', tier: 'advanced',
@@ -204,18 +204,18 @@ export const CONDITIONS = [
     feelsLike: 'An ice pick jabs the head for two seconds, out of nowhere, then it\'s gone.'
   },
   {
-    id: 'giant-cell-arteritis', name: 'Giant cell (temporal) arteritis — pattern', tier: 'advanced',
+    id: 'giant-cell-arteritis', name: 'Giant cell (temporal) arteritis: pattern', tier: 'advanced',
     primary: [...LR('temple'), ...LR('jaw-angle')],
     secondary: [...LRC('forehead-upper'), ...LR('cheek')],
     laterality: 'any', depths: ['surface', 'muscle'],
     qualities: ['dull-ache', 'tender-touch', 'burning'], intensity: [3, 8],
-    time: 'NEW headache in someone over 50, with scalp tenderness (hurts to brush hair or rest on a pillow) and jaw claudication — the jaw aches and tires while chewing.',
+    time: 'NEW headache in someone over 50, with scalp tenderness (hurts to brush hair or rest on a pillow) and jaw claudication. The jaw aches and tires while chewing.',
     differentiators: 'Age over 50 + new headache + jaw pain when chewing + tender scalp; common headaches don\'t cause jaw claudication.',
-    redFlags: 'Any visual symptom — transient dimming or loss, double vision — is an emergency. New headache over 50 with jaw pain when chewing → same-week doctor.',
-    feelsLike: 'A new, tender, throbbing temple headache — and the jaw tires out when chewing.'
+    redFlags: 'Any visual symptom: transient dimming or loss, double vision, is an emergency. New headache over 50 with jaw pain when chewing → same-week doctor.',
+    feelsLike: 'A new, tender, throbbing temple headache: and the jaw tires out when chewing.'
   },
   {
-    id: 'iih', name: 'Idiopathic intracranial hypertension — pattern', tier: 'advanced',
+    id: 'iih', name: 'Idiopathic intracranial hypertension: pattern', tier: 'advanced',
     primary: ['whole-head', ...LR('behind-eye')],
     secondary: [...LRC('occipital-upper'), ...LRC('occipital-lower')],
     laterality: 'any', depths: ['inside-head', 'deep-pressure'],
@@ -226,14 +226,14 @@ export const CONDITIONS = [
     feelsLike: 'A daily pressure-cooker headache with a whooshing sound in the ears, worse when lying down.'
   },
   {
-    id: 'secondary-red-flag-pattern', name: 'Serious secondary headache — warning pattern', tier: 'advanced',
+    id: 'secondary-red-flag-pattern', name: 'Serious secondary headache: warning pattern', tier: 'advanced',
     hiddenFromMatcher: true,
     primary: [], secondary: [],
     laterality: 'any', depths: ['inside-head', 'deep-pressure'], qualities: [], intensity: [8, 10],
-    time: 'Two shapes: (a) thunderclap — maximal within seconds; (b) progressive — new headache worsening over days to weeks, worse in mornings or with straining.',
-    differentiators: 'The pattern, not the location, is the signal. This entry powers the safety banner — it is never a match result.',
+    time: 'Two shapes: (a) thunderclap, maximal within seconds; (b) progressive, new headache worsening over days to weeks, worse in mornings or with straining.',
+    differentiators: 'The pattern, not the location, is the signal. This entry powers the safety banner. It is never a match result.',
     redFlags: null,
-    feelsLike: '"This headache is different from anything I\'ve had — and it\'s getting worse."'
+    feelsLike: '"This headache is different from anything I\'ve had, and it\'s getting worse."'
   }
 ];
 
@@ -244,15 +244,15 @@ export const CONDITIONS = [
 export const MATCHER_DISCLAIMER =
   'HeadPain compares your map with published headache patterns. It cannot diagnose you. ' +
   'Many different conditions share the same locations, and real people rarely match textbooks exactly. ' +
-  'Use this to describe your pain to a clinician — not to rule anything in or out.';
+  'Use this to describe your pain to a clinician, not to rule anything in or out.';
 
 export const CARD_DISCLAIMER = 'Educational pattern only. See a qualified clinician for diagnosis.';
 
 export const CONGENITAL_NOTE =
-  'This is a congenital condition identified at birth — included for learning, not something an adult can self-check with a pain map.';
+  'This is a congenital condition identified at birth, included for learning, not something an adult can self-check with a pain map.';
 
 export const MATCH_CAP_NOTE =
-  'Match % means "how closely your map resembles a published textbook pattern" — it is not the probability that you have this condition.';
+  'Match % means "how closely your map resembles a published textbook pattern". It is not the probability that you have this condition.';
 
 export const RED_FLAG_LIST = [
   'came on suddenly and was at maximum intensity within seconds ("thunderclap")',
@@ -316,7 +316,7 @@ export function scoreConditions(markers, zoneById) {
     let latScore = 0, capped = false, latNote = null;
     if (c.laterality === 'strict-unilateral') {
       if (unilateral && markers.length > 0) { latScore = 10; latNote = 'strictly one-sided ✓'; }
-      else if (bothSides) { latScore = -10; capped = true; latNote = 'usually one side only — less typical'; }
+      else if (bothSides) { latScore = -10; capped = true; latNote = 'usually one side only: less typical'; }
     } else if (c.laterality === 'usually-unilateral') {
       latScore = unilateral ? 5 : 2;
       if (unilateral) latNote = 'often one-sided ✓';

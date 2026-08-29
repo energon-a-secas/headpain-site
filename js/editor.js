@@ -23,7 +23,7 @@ export function renderEditor(el, ctx) {
     el.innerHTML = `
       <div class="empty-note">
         Tap the head to drop a pain point.<br>
-        <span class="muted">Or use <strong>Add by zone name</strong> below — handy for the neck and back of the head.</span>
+        <span class="muted">Or use <strong>Add by zone name</strong> below, handy for the neck and back of the head.</span>
       </div>`;
     return;
   }
@@ -48,7 +48,7 @@ export function renderEditor(el, ctx) {
       <div class="field">
         <div class="field-label">
           <span>Intensity</span>
-          <span class="field-value" data-ref="readout">${marker.intensity} — ${band.label}</span>
+          <span class="field-value" data-ref="readout">${marker.intensity}, ${band.label}</span>
         </div>
         <input type="range" min="0" max="10" step="1" value="${marker.intensity}"
                data-ref="intensity" aria-label="Pain intensity from 0 to 10">
@@ -109,7 +109,7 @@ export function renderEditor(el, ctx) {
     const v = +e.target.value;
     ctx.actions.updateSelected({ intensity: v }, { render: false });
     const b = intensityBand(v);
-    ref('readout').textContent = `${v} — ${b.label}`;
+    ref('readout').textContent = `${v}: ${b.label}`;
     const c = groupById(activeEpisode(), marker.groupId)?.color || intensityColor(v);
     dot.style.background = c;
     dot.style.color = c;
@@ -195,7 +195,7 @@ export function renderGroups(el, countEl, ctx) {
 
   if (!groups.length) {
     el.innerHTML = `<div class="empty-note">
-      One group per pain type — e.g. <em>migraine</em> vs <em>sinus</em>.<br>
+      One group per pain type: e.g. <em>migraine</em> vs <em>sinus</em>.<br>
       <span class="muted">Each group gets its own color on the head; click one to focus it.</span>
     </div>`;
     return;
@@ -206,7 +206,7 @@ export function renderGroups(el, countEl, ctx) {
     const active = g.id === ctx.state.activeGroupId;
     return `
       <div class="group-row ${active ? 'active' : ''}" data-id="${g.id}" role="button" tabindex="0"
-           title="${active ? 'Focused — click to release' : 'Click to focus this group'}">
+           title="${active ? 'Focused: click to release' : 'Click to focus this group'}">
         <button type="button" class="group-swatch" data-swatch="${g.id}"
           style="background:${g.color};color:${g.color}"
           title="Cycle color" aria-label="Cycle color for ${escHtml(g.name)}"></button>

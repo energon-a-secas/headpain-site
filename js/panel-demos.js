@@ -8,7 +8,7 @@ export function renderDemos(el, ctx) {
   el.innerHTML = `
     <h2 class="section-title">Demo maps</h2>
     <p class="fine-print">
-      Each demo loads as a <strong>new episode</strong> in your diary — edit or delete it freely.
+      Each demo loads as a <strong>new episode</strong> in your diary, edit or delete it freely.
       The combo demo at the bottom shows two pain groups in two colors on one head.
     </p>
     <div style="margin-top:12px">

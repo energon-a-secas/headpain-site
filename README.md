@@ -2,7 +2,7 @@
 
 # HeadPain
 
-Map head pain on a 3D head-and-neck model — where it hurts, how deep, how wide, what it feels like — and compare it against published headache patterns.
+Map head pain on a 3D head-and-neck model, where it hurts, how deep, how wide, what it feels like, and compare it against published headache patterns.
 
 [![Live][badge-site]][url-site]
 [![HTML5][badge-html]][url-html]
@@ -30,9 +30,9 @@ Map head pain on a 3D head-and-neck model — where it hurts, how deep, how wide
 
 ## Overview
 
-HeadPain helps people describe head pain precisely enough to stop guessing — so a sinus infection isn't treated like a migraine. Rotate a realistic 3D head and neck, tap exactly where it hurts, and describe each point: intensity (1–10), depth (surface, muscle, deep pressure, inside the head), quality (throbbing, electric, tight band…), spread (pinpoint to diffuse), and a free-text note.
+HeadPain helps people describe head pain precisely enough to stop guessing, so a sinus infection isn't treated like a migraine. Rotate a realistic 3D head and neck, tap exactly where it hurts, and describe each point: intensity (1–10), depth (surface, muscle, deep pressure, inside the head), quality (throbbing, electric, tight band…), spread (pinpoint to diffuse), and a free-text note.
 
-The app compares the map against 21 published headache patterns — from tension-type and cluster to Chiari malformations, SUNCT/SUNA, and trigeminal neuralgia — and explains which zones, qualities, and laterality drove each score, so the user can walk into a consultation with a clear description.
+The app compares the map against 21 published headache patterns, from tension-type and cluster to Chiari malformations, SUNCT/SUNA, and trigeminal neuralgia, and explains which zones, qualities, and laterality drove each score, so the user can walk into a consultation with a clear description.
 
 HeadPain is a communication aid, not a diagnosis. Everything stays in the browser (localStorage); there is no account and no server. Share links encode the map in the URL itself, and JSON export/import backs up the whole diary.
 
@@ -42,18 +42,18 @@ HeadPain is a communication aid, not a diagnosis. Everything stays in the browse
 
 ## Features
 
-- **Realistic 3D head + neck** — Lee Perry-Smith scan, rotate/zoom, tap-to-drop pain points anywhere on the skin.
-- **50 named anatomical zones** — forehead in a 3×2 grid, temples, sinuses, occiput, neck, and more; zones light up on hover with a tooltip, and free points auto-name to the nearest zone.
-- **Rich point descriptors** — intensity slider with severity bands, 4 depth levels rendered in 3D (surface decal, muscle ring, deep column, pulsing inside-the-head core), 10 pain qualities (spiky decals for electric/stabbing, an inward nail-spike for ice-pick), 4 spread sizes, per-point notes.
-- **Pain groups** — color-coded groups per episode (e.g. "sinus pressure" + "ice-pick left eye"); markers and zone tints take the group's color, a focused group captures new points while the rest dim, and the matcher can score one group in isolation.
-- **Demo gallery** — 7 loadable demos: 5 common single-condition maps, an ice-pick map, and a mixed combo (sinus + ice-pick) that shows two groups in two colors on one head. Demos load as new episodes, never overwrite.
-- **Intensity guidance** — at 7/10 a "stop it reaching 8" card, at 8–10 a treat-early card (dark quiet room, cold pack, no screens) plus a root-cause note about medication-overuse. Educational, non-drug, non-diagnostic.
-- **Condition matcher** — transparent scoring (zone overlap + laterality + quality + depth) against 21 common and advanced patterns, with differentiators, red flags, and presets that load either as a fresh map or as a new group alongside existing points.
-- **Safety first** — persistent "cannot diagnose" banner, red-flag list (thunderclap, worst-ever, neuro signs…), and capped match percentages that are explained as resemblance, not probability.
-- **Episodes diary** — multiple dated episodes in localStorage, camera position restored per episode, rename/delete, compare over time.
-- **Share & export** — compact share links (`#m=` in the URL, no server), JSON export of one episode or the whole diary, JSON import, PNG snapshot of the 3D view.
-- **X-ray mode** — translucent skin that fades surface decals so deep-pressure columns read clearly.
-- **Private by design** — no backend, no analytics on the map; opening a share link never overwrites the local diary.
+- **Realistic 3D head + neck**: Lee Perry-Smith scan, rotate/zoom, tap-to-drop pain points anywhere on the skin.
+- **50 named anatomical zones**: forehead in a 3×2 grid, temples, sinuses, occiput, neck, and more; zones light up on hover with a tooltip, and free points auto-name to the nearest zone.
+- **Rich point descriptors**: intensity slider with severity bands, 4 depth levels rendered in 3D (surface decal, muscle ring, deep column, pulsing inside-the-head core), 10 pain qualities (spiky decals for electric/stabbing, an inward nail-spike for ice-pick), 4 spread sizes, per-point notes.
+- **Pain groups**: color-coded groups per episode (e.g. "sinus pressure" + "ice-pick left eye"); markers and zone tints take the group's color, a focused group captures new points while the rest dim, and the matcher can score one group in isolation.
+- **Demo gallery**: 7 loadable demos: 5 common single-condition maps, an ice-pick map, and a mixed combo (sinus + ice-pick) that shows two groups in two colors on one head. Demos load as new episodes, never overwrite.
+- **Intensity guidance**: at 7/10 a "stop it reaching 8" card, at 8–10 a treat-early card (dark quiet room, cold pack, no screens) plus a root-cause note about medication-overuse. Educational, non-drug, non-diagnostic.
+- **Condition matcher**: transparent scoring (zone overlap + laterality + quality + depth) against 21 common and advanced patterns, with differentiators, red flags, and presets that load either as a fresh map or as a new group alongside existing points.
+- **Safety first**: persistent "cannot diagnose" banner, red-flag list (thunderclap, worst-ever, neuro signs…), and capped match percentages that are explained as resemblance, not probability.
+- **Episodes diary**: multiple dated episodes in localStorage, camera position restored per episode, rename/delete, compare over time.
+- **Share & export**: compact share links (`#m=` in the URL, no server), JSON export of one episode or the whole diary, JSON import, PNG snapshot of the 3D view.
+- **X-ray mode**: translucent skin that fades surface decals so deep-pressure columns read clearly.
+- **Private by design**: no backend, no analytics on the map; opening a share link never overwrites the local diary.
 
 ---
 

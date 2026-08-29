@@ -7,12 +7,12 @@ import { GROUP_COLORS } from './groups.js';
 export const DEMOS = [
   {
     id: 'demo-migraine', title: 'Demo · Migraine (one-sided)',
-    blurb: 'Throbbing temple and behind-eye pain on one side — the classic attack shape.',
+    blurb: 'Throbbing temple and behind-eye pain on one side. The classic attack shape.',
     groups: [{ conditionId: 'migraine-no-aura', name: 'Migraine', color: GROUP_COLORS[0] }]
   },
   {
     id: 'demo-tension', title: 'Demo · Tension-type',
-    blurb: 'A tight band across the forehead and neck — both sides, pressing, milder.',
+    blurb: 'A tight band across the forehead and neck. Both sides, pressing, milder.',
     groups: [{ conditionId: 'tension-type', name: 'Tension band', color: GROUP_COLORS[3] }]
   },
   {
@@ -37,7 +37,7 @@ export const DEMOS = [
   },
   {
     id: 'demo-combo', title: 'Demo · Combo: sinus infection + ice-pick',
-    blurb: 'Two pain types at once — sinus pressure in sky, an ice-pick at the left eye in rose. Click a group to focus it.',
+    blurb: 'Two pain types at once: sinus pressure in sky, an ice-pick at the left eye in rose. Click a group to focus it.',
     groups: [
       { conditionId: 'acute-rhinosinusitis', name: 'Sinus pressure', color: GROUP_COLORS[1] },
       {

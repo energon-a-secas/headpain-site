@@ -18,7 +18,7 @@ export function renderAll(ctx) {
   const group = activeGroup();
   const hasMarkers = ep.markers.length > 0;
   ctx.els.stageHint.textContent = group
-    ? `Adding to “${group.name}” — tap the head`
+    ? `Adding to “${group.name}”: tap the head`
     : hasMarkers
       ? 'Tap the head to add another point'
       : 'Tap the head to drop a pain point';

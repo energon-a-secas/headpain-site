@@ -110,7 +110,7 @@ export function initApp(ctx) {
         zoneId, p: spot.p, n: spot.n,
         intensity: 5, spread: zone.virtual ? 'diffuse' : 'regional'
       }));
-      toast(`${zone.label} — point added`);
+      toast(`${zone.label}: point added`);
     },
 
     pickOnHead(hit) {
@@ -124,7 +124,7 @@ export function initApp(ctx) {
         g = addGroup({});
         setActiveGroup(g.id);
       });
-      toast(`“${g.name}” created — new points join it while it's focused`);
+      toast(`“${g.name}” created: new points join it while it's focused`);
     },
 
     toggleGroupFocus(id) {
@@ -149,7 +149,7 @@ export function initApp(ctx) {
       const count = ep.markers.filter(m => m.groupId === id).length;
       if (count && !confirm(`Delete group "${g.name}"? Its ${count} point${count === 1 ? '' : 's'} stay on the map, ungrouped.`)) return;
       mutate(() => removeGroup(id));
-      toast('Group deleted — points kept');
+      toast('Group deleted: points kept');
     },
 
     applyPreset(conditionId) {
@@ -161,7 +161,7 @@ export function initApp(ctx) {
         replaceMarkers(markers);
       });
       ctx.actions.setTab('map');
-      toast(`Loaded ${markers.length} starting points — now adjust them to YOUR pain`);
+      toast(`Loaded ${markers.length} starting points: now adjust them to YOUR pain`);
     },
 
     applyPresetAsGroup(conditionId) {
@@ -177,7 +177,7 @@ export function initApp(ctx) {
         setActiveGroup(g.id);
       });
       ctx.actions.setTab('map');
-      toast(`“${g.name}” group added — ${spots.length} points; now adjust them to YOUR pain`);
+      toast(`“${g.name}” group added: ${spots.length} points; now adjust them to YOUR pain`);
     },
 
     loadDemo(demoId) {
@@ -195,7 +195,7 @@ export function initApp(ctx) {
         setActiveGroup(ep.groups[0]?.id || null);
       });
       ctx.actions.setTab('map');
-      toast('Demo loaded as a new episode — click a group to focus it');
+      toast('Demo loaded as a new episode: click a group to focus it');
     },
 
     newEpisode() {
@@ -229,7 +229,7 @@ export function initApp(ctx) {
       const url = buildShareUrl(registry.zoneIndexOf);
       if (!url) return;
       navigator.clipboard.writeText(url)
-        .then(() => toast('Share link copied — the map travels inside the URL'))
+        .then(() => toast('Share link copied: the map travels inside the URL'))
         .catch(() => toast('Could not reach the clipboard'));
     },
 

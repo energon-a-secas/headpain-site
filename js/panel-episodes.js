@@ -18,7 +18,7 @@ export function renderEpisodes(el, ctx) {
 
   el.innerHTML = `
     <div class="privacy-card">
-      Everything stays in <strong>this browser</strong> (localStorage) — no account, no server.
+      Everything stays in <strong>this browser</strong> (localStorage). No account, no server.
       Export JSON to back up or move devices. Share links encode the map in the URL itself.
     </div>
 

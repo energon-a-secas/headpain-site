@@ -145,9 +145,9 @@ export const ZONE_GROUPS = {
 
 export const DEPTHS = [
   { id: 'surface', label: 'On the skin', short: 'Surface',
-    desc: 'Feels like it\'s on the scalp or skin — touching or brushing hair can set it off.' },
+    desc: 'Feels like it\'s on the scalp or skin: touching or brushing hair can set it off.' },
   { id: 'muscle', label: 'In the muscle', short: 'Muscle',
-    desc: 'Feels like a sore, tight muscle — a knot or clenched band.' },
+    desc: 'Feels like a sore, tight muscle: a knot or clenched band.' },
   { id: 'deep-pressure', label: 'Deep / on bone', short: 'Deep',
     desc: 'Feels deep, like pressure pushing against the bone or from behind the face.' },
   { id: 'inside-head', label: 'Inside the head', short: 'Inside',
@@ -168,7 +168,7 @@ export const QUALITIES = [
 ];
 
 export const SPREADS = [
-  { id: 'pinpoint', label: 'Pinpoint', desc: 'Smaller than a coin — one finger covers it', radius: 0.14 },
+  { id: 'pinpoint', label: 'Pinpoint', desc: 'Smaller than a coin: one finger covers it', radius: 0.14 },
   { id: 'small', label: 'Small area', desc: 'About the size of a palm', radius: 0.28 },
   { id: 'regional', label: 'One region', desc: 'Covers a whole region (e.g. the whole temple)', radius: 0.5 },
   { id: 'diffuse', label: 'Widespread', desc: 'Spreads across several regions', radius: 0.85 }

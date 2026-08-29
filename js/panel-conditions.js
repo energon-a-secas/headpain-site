@@ -47,7 +47,7 @@ export function renderMatches(el, ctx) {
   } else {
     const matches = scoreConditions(markers, ctx.registry.zoneById);
     if (!matches.length) {
-      body = '<div class="empty-note">No close pattern match — that\'s common and completely fine. Real pain rarely follows a textbook.</div>';
+      body = '<div class="empty-note">No close pattern match. That\'s common and completely fine. Real pain rarely follows a textbook.</div>';
     } else {
       body = matches.map((m, i) => `
         <div class="match-card">
@@ -85,7 +85,7 @@ export function renderMatches(el, ctx) {
 export function renderRedFlags(el) {
   el.innerHTML = `
     <div class="redflag-card">
-      <h3>Skip the map — get urgent care if your headache…</h3>
+      <h3>Skip the map: get urgent care if your headache…</h3>
       <ul>${RED_FLAG_LIST.map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>
     </div>
     <div class="rootcause-card">
