@@ -42,7 +42,7 @@ export function renderMatches(el, ctx) {
   let body;
   if (!markers.length) {
     body = `<div class="empty-note">${group
-      ? `No points in the “${escHtml(group.name)}” group yet — tap the head to add some.`
+      ? `No points in the “${escHtml(group.name)}” group yet: tap the head to add some.`
       : 'Add points on the Map tab to see which published patterns your map resembles.'}</div>`;
   } else {
     const matches = scoreConditions(markers, ctx.registry.zoneById);
@@ -71,7 +71,7 @@ export function renderMatches(el, ctx) {
     <p class="fine-print">${escHtml(MATCHER_DISCLAIMER)}</p>
     <p class="fine-print" style="margin-top:6px">${escHtml(MATCH_CAP_NOTE)}</p>
     ${group ? `<p class="fine-print scope-note" style="margin-top:6px">Matching only the
-      <strong>${escHtml(group.name)}</strong> group — click it again on the Map tab to match the whole map.</p>` : ''}
+      <strong>${escHtml(group.name)}</strong> group: click it again on the Map tab to match the whole map.</p>` : ''}
     <div style="margin-top:12px">${body}</div>`;
 
   el.querySelectorAll('[data-preset]').forEach(btn => {
