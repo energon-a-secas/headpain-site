@@ -602,6 +602,26 @@ await it('every "See it on the head" link points at a pattern the app can actual
   } finally { ctx.destroy(); }
 });
 
+await it('every "Compare" link on the patterns page resolves to two real, showable patterns', async () => {
+  const ctx = await boot('../headache-patterns.html', { width: 1100, height: 900 });
+  try {
+    await until(() => ctx.doc.querySelectorAll('.lib-card').length > 0, { label: 'the pattern cards' });
+    const { episodeFromComparison } = await import('../js/presets.js');
+    const { buildRegistry } = await import('../js/registry.js');
+    const registry = buildRegistry(await fetch('../assets/zones.baked.json').then(r => r.json()), null);
+    const links = [...ctx.doc.querySelectorAll('a[href*="?compare="]')];
+    assert.gt(links.length, 10);
+    for (const a of links) {
+      const ids = decodeURIComponent(new URL(a.href).searchParams.get('compare')).split(',');
+      assert.equal(new Set(ids).size, 2, `a card offers to compare a pattern with itself: ${ids}`);
+      const ep = episodeFromComparison(ids, registry);
+      assert.ok(ep, `?compare=${ids} produces no episode`);
+      assert.equal(ep.groups.length, 2);
+      assert.gt(ep.markers.length, 1);
+    }
+  } finally { ctx.destroy(); }
+});
+
 await it('a pattern deep link scrolls to that pattern instead of the top', async () => {
   const ctx = await boot('../headache-patterns.html#cluster-headache', { width: 1100, height: 700 });
   try {

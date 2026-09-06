@@ -18,7 +18,7 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 
 | Page | What it is |
 |---|---|
-| `index.html` | The app. `?explain=1` opens read-only, `?learn=<pattern>` opens a library pattern read-only. |
+| `index.html` | The app. `?explain=1` opens read-only, `?learn=<pattern>` opens one library pattern read-only, `?compare=a,b` opens two of them as two pains on one head. |
 | `embed.html` | The embeddable widget. Never reads localStorage; renders only what its URL carries. |
 | `embed-builder.html` | A form that writes the iframe snippet, with a live preview and a working postMessage console. |
 | `headache-patterns.html` | The reading index over the condition library, built at runtime from `CONDITIONS` so it cannot drift from what the matcher scores. Each card deep-links to `?learn=`. |
@@ -28,13 +28,13 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 
 | Module | Lines | Owns |
 |---|---:|---|
-| `js/events.js` | 452 | `initApp`, every action the UI calls |
-| `js/conditions.js` | 378 | `CONDITIONS`, `scoreConditions`, the disclaimers |
-| `js/state.js` | 333 | the live model: `state`, episodes, pains, markers, impact |
+| `js/events.js` | 473 | `initApp`, every action the UI calls |
+| `js/conditions.js` | 379 | `CONDITIONS`, `scoreConditions`, the disclaimers |
+| `js/state.js` | 343 | the live model: `state`, episodes, pains, markers, impact |
 | `js/head3d.js` | 313 | `createHead3D`: renderer, camera, picking, zone tint |
-| `js/persist.js` | 273 | localStorage, JSON files, share-link payloads |
-| `js/legend.js` | 262 | `buildLegend`, `legendHtml`, `drawLegendPng` |
-| `js/embed.js` | 217 | the embed's boot, URL contract and postMessage API |
+| `js/persist.js` | 271 | localStorage, JSON files, share-link payloads |
+| `js/legend.js` | 255 | `buildLegend`, `legendHtml`, `drawLegendPng` |
+| `js/embed.js` | 216 | the embed's boot, URL contract and postMessage API |
 | `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
 | `js/markers.js` | 213 | `MarkerLayer`: decals, depth geometry, pattern textures |
 | `js/zones.js` | 202 | `ZONES`, `DEPTHS`, `QUALITIES`, `SPREADS`, intensity bands |
@@ -45,19 +45,20 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/panel-conditions.js` | 142 | `renderMatches`, `renderRedFlags`, `renderLibrary` |
 | `js/groups.js` | 137 | `GROUP_COLORS`, `paint`, `markerColor`, `markerPattern` |
 | `js/embed-builder.js` | 104 | the builder form and its postMessage console |
-| `js/presets.js` | 98 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
-| `js/panel-episodes.js` | 89 | `renderEpisodes` |
+| `js/presets.js` | 115 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
+| `js/panel-episodes.js` | 88 | `renderEpisodes` |
 | `js/picking.js` | 85 | `buildLut`, `nearestPatch`, `pickZone` |
-| `js/panel-explain.js` | 82 | `renderExplain` |
+| `js/panel-explain.js` | 110 | `renderExplain` |
 | `js/zoneshader.js` | 72 | `createZoneShader` |
 | `js/export.js` | 63 | JSON downloads, share URLs, the composited PNG |
 | `js/demos.js` | 53 | `DEMOS` |
-| `js/utils.js` | 45 | `$`, `$$`, `clamp`, `escHtml`, base64url helpers |
-| `js/registry.js` | 45 | `loadRegistry` |
-| `js/render.js` | 47 | `renderAll` |
+| `js/utils.js` | 53 | `$`, `$$`, `clamp`, `escHtml`, base64url helpers |
+| `js/registry.js` | 57 | `loadRegistry` |
+| `js/render.js` | 43 | `renderAll` |
 | `js/guidance.js` | 36 | `ROOT_CAUSE_NOTE`, `guidanceFor` |
-| `js/panel-demos.js` | 40 | `renderDemos` (rendered inside the Patterns tab) |
-| `js/app.js` | 31 | boot |
+| `js/panel-demos.js` | 41 | `renderDemos` (rendered inside the Patterns tab) |
+| `js/page-library.js` | 110 | `renderLibraryPage`: the headache-patterns page |
+| `js/app.js` | 32 | boot |
 
 Vendored from `packages/neorgon-ui/`: never edit in place, run the sync script instead: `js/neorgon-footer.js`, `js/neorgon-header.js`, `js/neorgon-dom.js`.
 
@@ -148,6 +149,22 @@ against a stub.
 - **The x-ray depth columns read poorly head-on.** A column pointing at the camera
   projects to almost nothing. It is a known weakness of the depth encoding, not a
   regression.
+- **Zone descriptions are merged at runtime, not baked.** `tools/bake-zones.mjs`
+  carries geometry only, so `assets/zones.baked.json` has no `desc` field.
+  `buildRegistry` merges the 55 authored descriptions from `js/zones.js` onto the
+  baked zones by `baseId`. Without that merge the plain-language line under the
+  point editor and every zone-browser tooltip render empty, which is how they
+  shipped until 2026-09-05. If you add a zone description, put it in `js/zones.js`
+  and do not re-bake expecting it to appear.
+- **`base64UrlDecode` returns `null` on malformed input, it does not throw.**
+  `atob` refuses any base64 whose length is 1 mod 4, which is what a share link
+  losing a character to a chat client's line wrap looks like. Callers pass the
+  result straight to `safeJsonParse` and fall through to the local diary. Do not
+  "simplify" the try/catch away: the throw used to escape `boot()` and cost the
+  reader their own diary along with the link.
+- **Anything handed out as a marker position must be a copy.** `WHOLE_HEAD_SPOT`
+  in `presets.js` is a module constant; handing out its arrays by reference made
+  every whole-head marker in every episode share one pair.
 
 ## Do not touch
 

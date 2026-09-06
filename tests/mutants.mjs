@@ -166,7 +166,10 @@ const MUTANTS = [
     id: 'shared-link-overwrites-diary',
     file: 'js/persist.js',
     why: 'opening somebody else\'s share link saves it over your own episodes',
-    find: '  if (state.shared) return; // viewing a shared link — never overwrite the local diary',
+    // Anchored on the statement, not on the comment beside it: quoting the
+    // comment verbatim would drag its em dash into this file and trip the
+    // repo's own copy linter.
+    find: '  if (state.shared) return; //',
     replace: '  // MUTANT: the guard that protects the local diary is gone',
   },
   {
