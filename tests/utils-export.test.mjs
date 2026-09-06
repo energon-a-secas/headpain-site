@@ -530,3 +530,26 @@ test('the burned-in legend carries the impact sentences the person wrote, not ju
   assert.ok(Math.min(...ys) >= source.height,
     `text was painted at y=${Math.min(...ys)}, above the legend strip at y=${source.height}: it lands on the head`);
 });
+
+// ---------------------------------------------------------------------------
+// A gap the whole-suite mutation harness found.
+// ---------------------------------------------------------------------------
+
+test('the plain share link stays editable; only the explain link opens read-only', () => {
+  // Two buttons offer two different links. If every link carried ?explain=1,
+  // "Copy editable link" would silently hand your other device a read-only page
+  // and there would be no way to move a map between your own devices.
+  const ep = state.episodes.find(e => e.id === state.activeEpisodeId) || state.episodes[0];
+  if (!ep.groups.length) {
+    const g = addGroup({ name: 'Pain' });
+    setActiveGroup(g.id);
+    addMarker(marker({ zoneId: 'temple-left' }));
+  }
+  const plain = buildShareUrl(registry.zoneIndexOf);
+  const explain = buildShareUrl(registry.zoneIndexOf, { explain: true });
+
+  assert.ok(!plain.includes('explain'), `the editable link opens read-only: ${plain.slice(0, 60)}`);
+  assert.ok(explain.includes('?explain=1'), 'the explain link lost its flag');
+  assert.equal(plain.split('#m=')[1], explain.split('#m=')[1],
+    'the two links must carry the same map, and differ only in how it opens');
+});

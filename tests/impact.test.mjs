@@ -345,9 +345,17 @@ test('an impact that was never normalized still cannot print "undefined" into th
   assert.deepEqual(impactSentences({ daysLost: 40 }),
     ['In the last month it cost me about 40 days.'],
     'the clamp lives in normalizeImpact; moving it here would hide an unclamped stored value');
+  // The guard coerces, so a value that skipped normalizeImpact still reads as
+  // English. This used to be pinned as "1 days" with the label "characterisation,
+  // not a requirement", which locked the defect in place: fixing it turned the
+  // suite red.
   assert.deepEqual(impactSentences({ daysLost: '1' }),
-    ['In the last month it cost me about 1 days.'],
-    'the plural guard is a strict === 1, so a string that skipped normalizeImpact pluralises wrongly');
+    ['In the last month it cost me about 1 day.'],
+    'the plural guard stopped coercing, so an unnormalised value pluralises wrongly again');
+  assert.deepEqual(impactSentences({ daysLost: 1 }),
+    ['In the last month it cost me about 1 day.']);
+  assert.deepEqual(impactSentences({ daysLost: 2 }),
+    ['In the last month it cost me about 2 days.']);
 });
 
 // ---------------------------------------------------------------------------

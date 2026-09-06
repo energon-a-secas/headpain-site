@@ -20,8 +20,18 @@ const MAX_ZONES_LISTED = 4;
 function commaList(items, joiner = 'and') {
   const list = items.filter(Boolean);
   if (list.length <= 1) return list[0] || '';
-  if (list.length === 2) return `${list[0]} ${joiner} ${list[1]}`;
+  // No two-item special case: the general form already builds "a and b" for
+  // two, because slice(0, -1).join(', ') is just "a".
   return `${list.slice(0, -1).join(', ')} ${joiner} ${list[list.length - 1]}`;
+}
+
+// Named only when it is not the default. "On the skin" on every row is noise;
+// "deep against the bone" on the one row that is deep is the whole point.
+function depthWord(markers) {
+  const deep = markers.filter(m => m.depth && m.depth !== 'surface');
+  if (!deep.length) return null;
+  const id = commonest(deep.map(m => m.depth));
+  return id ? depthById(id).plain : null;
 }
 
 function commonest(values) {
@@ -87,6 +97,7 @@ export function buildLegend(ep, zoneById) {
       color: g.color,
       pattern: g.pattern,
       conditionId: g.conditionId || null,
+      depthWord: markers.length ? depthWord(markers) : null,
       // Spoken, for anyone who cannot use the swatch: "sky, ringed".
       styleWords: `${colorName(g.color)}, ${patternLabel(g.pattern)}`,
       count: markers.length,
@@ -114,7 +125,8 @@ export function legendHtml(model, { verbose = false, isolateId = null } = {}) {
   const rows = model.pains.map(p => {
     const dimmed = isolateId && isolateId !== p.id;
     const meta = p.count
-      ? `${p.count} point${p.count === 1 ? '' : 's'} · worst ${p.peak}/10 · ${p.styleWords}`
+      ? [`${p.count} point${p.count === 1 ? '' : 's'}`, `worst ${p.peak}/10`, p.depthWord, p.styleWords]
+        .filter(Boolean).join(' · ')
       : `no points yet · ${p.styleWords}`;
     return `
       <li class="legend-row ${dimmed ? 'faded' : ''}">
@@ -138,7 +150,8 @@ export function legendHtml(model, { verbose = false, isolateId = null } = {}) {
       <ul class="legend-list">${rows}</ul>
       <div class="legend-scale">
         <span>mild</span><span class="legend-ramp" aria-hidden="true"></span><span>worst</span>
-        <span class="legend-scale-note">stronger colour means more intense</span>
+        <span class="legend-scale-note">stronger colour means more intense${
+          model.pains.some(p => p.depthWord) ? '; turn the head to see how deep' : ''}</span>
       </div>
     </div>`;
 }
@@ -227,7 +240,8 @@ export function drawLegendPng(g, model, { x, y, width, scale: s = 1 }) {
     g.font = font(13 * s, 400);
     g.fillStyle = 'rgba(255,255,255,0.62)';
     const meta = p.count
-      ? `${p.count} point${p.count === 1 ? '' : 's'} · worst ${p.peak}/10 · ${p.styleWords}`
+      ? [`${p.count} point${p.count === 1 ? '' : 's'}`, `worst ${p.peak}/10`, p.depthWord, p.styleWords]
+        .filter(Boolean).join(' · ')
       : `no points · ${p.styleWords}`;
     g.fillText(meta, x + pad + size + 20 * s + nameWidth, cursor);
     cursor += 34 * s;

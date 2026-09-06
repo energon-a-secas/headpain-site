@@ -187,7 +187,11 @@ test('a hidden or not-mappable entry stays out of the results even when its zone
   // The unflagged control proves the shape really does clear the threshold, so
   // the other two are absent because of the guard and nothing else.
   assert.deepEqual(got, ['probe-visible']);
-  assert.equal(CONDITIONS.at(-1).id, 'secondary-red-flag-pattern', 'the probes leaked into the real library');
+  // Check for the probe by name, not by position: asserting the last entry
+  // makes adding any new condition fail with a message about a leak that is
+  // not there.
+  assert.ok(!CONDITIONS.some(c => String(c.id).startsWith('probe-')),
+    'a test probe leaked into the real library');
 });
 
 test('the safety-banner entry and the congenital patterns stay flagged, and carry no zones a map could hit', () => {
@@ -545,8 +549,39 @@ test('every red-flag item finishes the sentence its heading starts, instead of s
     assert.equal(item, item.trimEnd(), `trailing space: ${item}`);
     assert.notEqual(item[0], item[0].toUpperCase(), `${item} starts as its own sentence`);
     assert.ok(!item.endsWith('.'), `${item} ends as its own sentence`);
-    assert.match(item, /^(came|is|comes|started)\b/, `${item} does not continue "your headache…"`);
+    // Lower-case opening only: each item has to read as a continuation of
+    // "get urgent care if your headache...", not as its own sentence. The verb
+    // itself is copy, and pinning the set turned a correct rewording red.
+    assert.match(item, /^[a-z]/, `${item} does not continue "your headache…"`);
   }
   assert.ok(RED_FLAG_LIST.some(i => i.includes('thunderclap')), 'the thunderclap line is the one that must never go');
   assert.ok(RED_FLAG_LIST.some(i => i.includes('worst headache of your life')));
+});
+
+// ---------------------------------------------------------------------------
+// A gap the whole-suite mutation harness found.
+// ---------------------------------------------------------------------------
+
+test('secondary zones carry weight, so a pattern felt around its edges still scores', () => {
+  // Secondary zones are where a pattern is *also* felt. Zeroing their weight
+  // leaves a map that sits entirely in them scoring nothing, and the tab tells
+  // someone their pain resembles no published pattern at all.
+  const withSecondary = CONDITIONS.find(c =>
+    c.secondary?.some(z => registry.zoneById(z)) &&
+    !c.notMappable &&
+    // pick one whose secondary zones are not also primary somewhere in itself
+    c.secondary.filter(z => registry.zoneById(z) && !c.primary.includes(z)).length >= 2);
+  assert.ok(withSecondary, 'no condition in the library has usable secondary zones');
+
+  const zones = withSecondary.secondary
+    .filter(z => registry.zoneById(z) && !withSecondary.primary.includes(z))
+    .slice(0, 3);
+  const map = zones.map((z, i) => marker({
+    zoneId: z, intensity: 8, depth: withSecondary.depths?.[0] || 'surface',
+    quality: withSecondary.qualities?.[0] || null, id: `s${i}`
+  }));
+
+  const hit = scoreConditions(map, registry.zoneById).find(r => r.condition.id === withSecondary.id);
+  assert.ok(hit, `${withSecondary.id} scored nothing for a map sitting entirely in its own secondary zones`);
+  assert.ok(hit.score > 0);
 });

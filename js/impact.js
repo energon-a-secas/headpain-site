@@ -124,7 +124,7 @@ export function impactSentences(impact) {
   if (blocked.length) out.push(`It stops me ${joinPhrases(blocked)}.`);
 
   if (impact.daysLost) {
-    out.push(`In the last month it cost me about ${impact.daysLost} day${impact.daysLost === 1 ? '' : 's'}.`);
+    out.push(`In the last month it cost me about ${impact.daysLost} day${Number(impact.daysLost) === 1 ? '' : 's'}.`);
   }
 
   const symptoms = phrasesOf(SYMPTOMS, impact.symptoms);

@@ -306,8 +306,16 @@ test('a demo whose condition was renamed fails loudly rather than rendering an e
   };
   DEMOS.push(synthetic);
   try {
-    assert.throws(() => episodeFromDemo(synthetic.id, registry), TypeError,
-      'a dangling conditionId no longer throws; if the group is now skipped or the episode is null, that is a better contract, but the demo shelf must then be checked for empty maps instead of for crashes');
+    // The requirement is that it does not sail on and put an empty pain on the
+    // shelf. Throwing satisfies that, and so would returning null or skipping
+    // the group, so none of those is pinned here: content-integrity.test.mjs
+    // already fails if a real demo's conditionId dangles, and this only has to
+    // stop the failure being silent.
+    let built = null;
+    let threw = false;
+    try { built = episodeFromDemo(synthetic.id, registry); } catch { threw = true; }
+    assert.ok(threw || !built || built.markers.length > 0,
+      'a dangling conditionId produced an episode whose pain has no points, so the demo shelf would offer an empty head with no error anywhere');
   } finally {
     DEMOS.splice(DEMOS.indexOf(synthetic), 1);
   }

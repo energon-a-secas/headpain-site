@@ -886,3 +886,48 @@ test('resetToDefaults puts the model back to one empty episode with nothing left
   assert.equal(state.isolateGroupId, null);
   assert.equal(state.view, 'normal');
 });
+
+// ---------------------------------------------------------------------------
+// Gaps found by running the mutation harness over the WHOLE suite. Each of
+// these mutations left every one of the 328 tests green.
+// ---------------------------------------------------------------------------
+
+// A pain on the active episode, without reaching for another module's API.
+function addGroupTo(s, name) {
+  const ep = s.episodes.find(e => e.id === s.activeEpisodeId) || s.episodes[0];
+  const g = defaultGroup({ name }, ep.groups);
+  ep.groups.push(g);
+  return g;
+}
+
+test('the diary is written under the one key the app has always used', () => {
+  // Changing STORAGE_KEY orphans every diary already on every reader's disk,
+  // silently: the app boots to an empty map and their episodes are still there,
+  // unreachable. The literal is pinned on purpose.
+  resetToDefaults();
+  addGroupTo(state, 'Pinned');
+  saveToStorage();
+  assert.equal(STORAGE_KEY, 'headmap-v2', 'renaming the key strands every existing diary');
+  const raw = localStorage.getItem('headmap-v2');
+  assert.ok(raw, 'saveToStorage did not write under headmap-v2');
+  assert.equal(JSON.parse(raw).episodes[0].groups[0].name, 'Pinned');
+});
+
+test('absorbing the local diary under a shared link does not duplicate what is already on screen', () => {
+  // absorbShared merges the stored episodes back underneath a shared map. Without
+  // the id filter, an episode that is already on screen is merged in a second
+  // time, and the diary grows a duplicate every time a share link is opened and
+  // then edited.
+  resetToDefaults();
+  const mine = defaultEpisode('Mine');
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    v: 2, episodes: [mine], activeEpisodeId: mine.id, view: 'normal'
+  }));
+  // Load the very same episode as if it had arrived as a share link.
+  loadFromStorage();
+  state.shared = true;
+  absorbShared();
+  const ids = state.episodes.map(e => e.id);
+  assert.equal(new Set(ids).size, ids.length, `absorbShared duplicated an episode: ${JSON.stringify(ids)}`);
+  assert.equal(state.episodes.filter(e => e.title === 'Mine').length, 1);
+});

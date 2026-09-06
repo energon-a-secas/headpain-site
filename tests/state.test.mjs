@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { marker } from './fixtures.mjs';
 import {
   uid, state, activeEpisode, createEpisode, loadEpisode, deleteEpisode, ensureActivePain,
-  addMarker, updateMarker, removeMarker, selectMarker, selectedMarker, replaceMarkers,
+  addMarker, updateMarker, removeMarker, clearMarkers, selectMarker, selectedMarker, replaceMarkers,
   adoptOrphans, ORPHAN_PAIN_NAME,
   addGroup, renameGroup, removeGroup, setGroupStyle, resetMap,
   setActiveGroup, activeGroup, setIsolateGroup, isolatedGroup,
@@ -727,4 +727,38 @@ test('resetToDefaults restores a clean world', () => {
   assert.equal(state.activeGroupId, null);
   assert.equal(state.isolateGroupId, null);
   assert.equal(state.selectedMarkerId, null);
+});
+
+// ---------------------------------------------------------------------------
+// Gaps the whole-suite mutation harness found: each mutation below left all 328
+// tests green.
+// ---------------------------------------------------------------------------
+
+test('Clear all actually clears, rather than confirming and doing nothing', () => {
+  resetToDefaults();
+  const g = addGroup({ name: 'Pain' });
+  setActiveGroup(g.id);
+  addMarker(marker({ zoneId: 'temple-left' }));
+  const m = addMarker(marker({ zoneId: 'vertex-center' }));
+  selectMarker(m.id);
+  assert.equal(activeEpisode().markers.length, 2);
+
+  clearMarkers();
+
+  assert.equal(activeEpisode().markers.length, 0, 'the points survived Clear all');
+  assert.equal(state.selectedMarkerId, null, 'a deleted point is still selected, so the editor reads a ghost');
+  assert.equal(activeEpisode().groups.length, 1, 'clearing the points must not delete the pains');
+});
+
+test('a new episode arrives with an impact record, so the panel has somewhere to write', () => {
+  resetToDefaults();
+  const ep = createEpisode('Fresh');
+  assert.ok(ep.impact && typeof ep.impact === 'object',
+    'defaultEpisode dropped impact; the Impact panel would write into undefined');
+  for (const key of ['frequency', 'duration', 'daysLost']) {
+    assert.equal(ep.impact[key], null, `impact.${key} should start unanswered`);
+  }
+  for (const key of ['blocked', 'symptoms', 'relief']) {
+    assert.deepEqual(ep.impact[key], [], `impact.${key} should start empty`);
+  }
 });
