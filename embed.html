@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HeadPain embed</title>
+  <!-- An embed is a widget inside someone else's page: it must not be indexed
+       as a page of its own, and it must not carry the site header or footer. -->
+  <meta name="robots" content="noindex, follow">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/embed.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/"
+    }
+  }
+  </script>
+</head>
+<body class="embed-body">
+  <figure class="embed-frame">
+    <figcaption id="embed-caption" class="embed-caption"></figcaption>
+
+    <div id="embed-stage" class="embed-stage">
+      <div id="embed-loader" class="stage-loader" aria-live="polite">
+        <div class="loader"></div>
+        <span>Loading the head…</span>
+      </div>
+      <div id="embed-legend" class="stage-legend"></div>
+    </div>
+
+    <div id="embed-controls" class="embed-controls">
+      <button type="button" class="chip-btn" id="embed-xray" aria-pressed="false"
+        title="See how deep each pain sits">X-ray</button>
+      <button type="button" class="chip-btn" id="embed-reset" title="Back to the front view">Reset</button>
+      <span id="embed-pains" class="embed-pains" aria-label="Show one pain alone"></span>
+      <a class="embed-mark" href="https://headpain.neorgon.com/" target="_blank" rel="noopener">HeadPain</a>
+    </div>
+  </figure>
+
+  <script type="module" src="js/embed.js"></script>
+</body>
+</html>

@@ -1,9 +1,11 @@
-// Map tab — selected-point editor, points list, groups list, and the zone browser.
+// Map tab — selected-point editor, points list, and the zone browser.
+// The pains themselves live in the pain bar above the head (painbar.js).
 
 import { DEPTHS, QUALITIES, SPREADS, ZONE_GROUPS, intensityBand, depthById, qualityById } from './zones.js';
-import { escHtml, intensityColor } from './utils.js';
+import { escHtml } from './utils.js';
 import { selectedMarker, activeEpisode } from './state.js';
-import { groupById, markerColor } from './groups.js';
+import { groupById, markerColor, markerPattern, paint } from './groups.js';
+import { patternSvg } from './patterns.js';
 import { guidanceFor, ROOT_CAUSE_NOTE } from './guidance.js';
 
 function guidanceHtml(intensity) {
@@ -33,13 +35,15 @@ export function renderEditor(el, ctx) {
   const band = intensityBand(marker.intensity);
   const depth = depthById(marker.depth);
   const color = markerColor(ep, marker);
+  const pain = groupById(ep, marker.groupId);
 
   el.innerHTML = `
     <div class="editor-card">
       <div class="editor-head">
         <div class="editor-zone">
-          <span class="dot" style="background:${color};color:${color}"></span>
+          <span class="swatch" data-ref="swatch">${patternSvg(markerPattern(ep, marker), color, 15)}</span>
           <span>${escHtml(zone?.label || 'Free point')}</span>
+          ${pain ? `<span class="editor-pain">in ${escHtml(pain.name)}</span>` : ''}
         </div>
         <button type="button" class="btn btn--ghost btn--sm" data-act="done">Done</button>
       </div>
@@ -48,7 +52,7 @@ export function renderEditor(el, ctx) {
       <div class="field">
         <div class="field-label">
           <span>Intensity</span>
-          <span class="field-value" data-ref="readout">${marker.intensity}, ${band.label}</span>
+          <span class="field-value" data-ref="readout">${marker.intensity}: ${band.label}</span>
         </div>
         <input type="range" min="0" max="10" step="1" value="${marker.intensity}"
                data-ref="intensity" aria-label="Pain intensity from 0 to 10">
@@ -81,13 +85,12 @@ export function renderEditor(el, ctx) {
         </div>
       </div>
 
-      ${ep.groups.length ? `
+      ${ep.groups.length > 1 ? `
       <div class="field">
-        <div class="field-label"><span>Group</span></div>
+        <div class="field-label"><span>Which pain is this?</span></div>
         <div class="chip-row" data-ref="groups">
-          <button type="button" class="chip ${!marker.groupId ? 'active' : ''}" data-group="">None</button>
           ${ep.groups.map(g => `<button type="button" class="chip chip--group ${g.id === marker.groupId ? 'active' : ''}"
-            data-group="${g.id}"><span class="dot dot--sm" style="background:${g.color};color:${g.color}"></span>${escHtml(g.name)}</button>`).join('')}
+            data-group="${g.id}">${patternSvg(g.pattern, g.color, 13)}${escHtml(g.name)}</button>`).join('')}
         </div>
       </div>` : ''}
 
@@ -103,16 +106,16 @@ export function renderEditor(el, ctx) {
     </div>`;
 
   const ref = name => el.querySelector(`[data-ref="${name}"]`);
-  const dot = el.querySelector('.dot');
 
   ref('intensity').addEventListener('input', e => {
     const v = +e.target.value;
     ctx.actions.updateSelected({ intensity: v }, { render: false });
     const b = intensityBand(v);
     ref('readout').textContent = `${v}: ${b.label}`;
-    const c = groupById(activeEpisode(), marker.groupId)?.color || intensityColor(v);
-    dot.style.background = c;
-    dot.style.color = c;
+    // Same grammar as the head: the pain keeps its hue, saturation tracks intensity.
+    const c = paint(groupById(activeEpisode(), marker.groupId)?.color, v);
+    const svg = ref('swatch').querySelector('svg');
+    if (svg) { svg.style.color = c; svg.style.fill = c; }
     ref('guidance').innerHTML = guidanceHtml(v);
   });
   ref('intensity').addEventListener('change', () => ctx.actions.renderAll());
@@ -165,7 +168,7 @@ export function renderPointsList(el, countEl, ctx) {
     return `
       <div class="point-row ${m.id === ctx.state.selectedMarkerId ? 'selected' : ''}" data-id="${m.id}"
            role="button" tabindex="0">
-        <span class="dot" style="background:${color};color:${color}"></span>
+        <span class="swatch">${patternSvg(markerPattern(ep, m), color, 14)}</span>
         <div class="point-main">
           <div class="point-title">${escHtml(zone?.label || 'Free point')}</div>
           <div class="point-meta">${escHtml(meta)}</div>
@@ -185,82 +188,6 @@ export function renderPointsList(el, countEl, ctx) {
   });
   el.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => ctx.actions.deletePoint(btn.dataset.del));
-  });
-}
-
-export function renderGroups(el, countEl, ctx) {
-  const ep = activeEpisode();
-  const groups = ep?.groups || [];
-  countEl.textContent = groups.length;
-
-  if (!groups.length) {
-    el.innerHTML = `<div class="empty-note">
-      One group per pain type: e.g. <em>migraine</em> vs <em>sinus</em>.<br>
-      <span class="muted">Each group gets its own color on the head; click one to focus it.</span>
-    </div>`;
-    return;
-  }
-
-  el.innerHTML = groups.map(g => {
-    const count = ep.markers.filter(m => m.groupId === g.id).length;
-    const active = g.id === ctx.state.activeGroupId;
-    return `
-      <div class="group-row ${active ? 'active' : ''}" data-id="${g.id}" role="button" tabindex="0"
-           title="${active ? 'Focused: click to release' : 'Click to focus this group'}">
-        <button type="button" class="group-swatch" data-swatch="${g.id}"
-          style="background:${g.color};color:${g.color}"
-          title="Cycle color" aria-label="Cycle color for ${escHtml(g.name)}"></button>
-        <div class="point-main">
-          <div class="point-title" data-title="${g.id}">${escHtml(g.name)}</div>
-          <div class="point-meta">${count} point${count === 1 ? '' : 's'}${active ? ' · adding points here' : ''}</div>
-        </div>
-        <button type="button" class="point-del" data-rename="${g.id}" aria-label="Rename group">✎</button>
-        <button type="button" class="point-del" data-del="${g.id}" aria-label="Delete group">×</button>
-      </div>`;
-  }).join('');
-
-  el.querySelectorAll('.group-row').forEach(row => {
-    row.addEventListener('click', e => {
-      if (e.target.closest('button')) return;
-      ctx.actions.toggleGroupFocus(row.dataset.id);
-    });
-    row.addEventListener('keydown', e => {
-      if (e.target.closest('button') || e.target.closest('input')) return;
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ctx.actions.toggleGroupFocus(row.dataset.id); }
-    });
-  });
-  el.querySelectorAll('[data-swatch]').forEach(btn => {
-    btn.addEventListener('click', () => ctx.actions.cycleGroupColor(btn.dataset.swatch));
-  });
-  el.querySelectorAll('[data-del]').forEach(btn => {
-    btn.addEventListener('click', () => ctx.actions.deleteGroup(btn.dataset.del));
-  });
-  el.querySelectorAll('[data-rename]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.rename;
-      const title = el.querySelector(`[data-title="${id}"]`);
-      const group = groups.find(g => g.id === id);
-      if (!title || !group) return;
-      const input = document.createElement('input');
-      input.className = 'group-rename';
-      input.value = group.name;
-      input.maxLength = 60;
-      input.setAttribute('aria-label', 'Group name');
-      title.replaceWith(input);
-      input.focus();
-      input.select();
-      let done = false;
-      const commit = save => {
-        if (done) return;
-        done = true;
-        ctx.actions.renameGroup(id, save ? input.value : group.name);
-      };
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); commit(true); }
-        else if (e.key === 'Escape') { commit(false); }
-      });
-      input.addEventListener('blur', () => commit(true));
-    });
   });
 }
 

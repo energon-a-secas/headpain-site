@@ -8,15 +8,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { buildLut, pickZone } from './picking.js';
 import { createZoneShader } from './zoneshader.js';
 import { MarkerLayer } from './markers.js';
-import { intensityRGB } from './utils.js';
-import { hexToRgb } from './groups.js';
+import { paintRgb, GROUP_COLORS } from './groups.js';
 
 const CAM_TARGET = new THREE.Vector3(0, -0.55, 0);
 const DEFAULT_CAMERA = { theta: 0, phi: Math.PI / 2, dist: 4.9 };
 const SKIN_COLOR = 0xd9ac8c;
 const HOVER_TINT = [0.07, 0.72, 0.51];
 const SELECT_TINT = [0.10, 0.86, 0.61];
-const FOCUS_DIM = 0.25; // zone-tint strength multiplier outside the focused group
+const FOCUS_DIM = 0.25; // zone-tint strength multiplier outside an isolated pain
 
 function unsupportedStub(reason) {
   return {
@@ -24,6 +23,7 @@ function unsupportedStub(reason) {
     reason,
     ready: Promise.resolve(),
     sync() {}, setXray() {}, resetView() {}, setCamera() {}, resize() {},
+    setHoverZone() {}, renderNow() {}, setBackground() {},
     getCanvas: () => null, snapshot: () => null, dispose() {},
     onPick: null, onHoverZone: null, onCameraChange: null
   };
@@ -72,7 +72,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
   let markerLayer = null;
   let lut = null;
 
-  const view = { markers: [], selectedId: null, hoverZoneId: null, xray: false, groups: [], activeGroupId: null };
+  const view = { markers: [], selectedId: null, hoverZoneId: null, xray: false, groups: [], isolateGroupId: null };
   const api = {
     supported: true,
     ready: null,
@@ -84,9 +84,11 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
   function applyZoneStates() {
     if (!zoneShader) return;
     zoneShader.clearAll();
-    const groupTint = new Map(); // groupId -> [r,g,b] 0..1
-    for (const g of view.groups) groupTint.set(g.id, hexToRgb(g.color).map(v => v / 255));
-    const tintOf = m => groupTint.get(m.groupId) || intensityRGB(m.intensity).map(v => v / 255);
+    // Zone tint follows the same grammar as the decals: the pain's hue, with
+    // intensity riding on saturation, so a zone can never disagree with the
+    // marker sitting on it.
+    const hueOf = new Map(view.groups.map(g => [g.id, g.color]));
+    const tintOf = m => paintRgb(hueOf.get(m.groupId) || GROUP_COLORS[0], m.intensity).map(v => v / 255);
 
     const perZone = new Map(); // index -> {intensity, tint, active, hover, selected, inFocus}
     const entry = i => {
@@ -100,7 +102,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
       e.active = true;
       if (m.intensity >= e.intensity) { e.intensity = m.intensity; e.tint = tintOf(m); }
       if (m.id === view.selectedId) e.selected = true;
-      if (!view.activeGroupId || m.groupId === view.activeGroupId) e.inFocus = true;
+      if (!view.isolateGroupId || m.groupId === view.isolateGroupId) e.inFocus = true;
     }
     if (view.hoverZoneId) {
       const i = registry.zoneIndexOf(view.hoverZoneId);
@@ -119,15 +121,15 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
     requestRender();
   }
 
-  api.sync = (markers, selectedId, hoverZoneId, groups = [], activeGroupId = null) => {
+  api.sync = (markers, selectedId, hoverZoneId, groups = [], isolateGroupId = null) => {
     view.markers = markers || [];
     view.selectedId = selectedId || null;
     view.hoverZoneId = hoverZoneId || null;
     view.groups = groups || [];
-    view.activeGroupId = activeGroupId || null;
-    const groupColors = {};
-    for (const g of view.groups) groupColors[g.id] = g.color;
-    if (markerLayer) markerLayer.sync(view.markers, view.selectedId, groupColors, view.activeGroupId);
+    view.isolateGroupId = isolateGroupId || null;
+    const groupStyle = {};
+    for (const g of view.groups) groupStyle[g.id] = { color: g.color, pattern: g.pattern };
+    if (markerLayer) markerLayer.sync(view.markers, view.selectedId, groupStyle, view.isolateGroupId);
     applyZoneStates();
   };
 
@@ -163,6 +165,13 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
     requestRender();
   }
   api.setCamera = setCamera;
+
+  // The embed blends with its host page, and the WebGL clear colour is part of
+  // that: setting only the CSS background leaves a dark rectangle in the middle.
+  api.setBackground = hex => {
+    scene.background = new THREE.Color(hex);
+    requestRender();
+  };
   api.resetView = () => setCamera(DEFAULT_CAMERA.theta, DEFAULT_CAMERA.phi, DEFAULT_CAMERA.dist);
 
   controls.addEventListener('end', () => {
@@ -253,6 +262,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
   api.getCanvas = () => renderer.domElement;
   api.debugPick = pickAt; // exposed for automated tests
   api.debugScene = () => ({ scene, camera, headMesh, lut });
+  api.renderNow = () => renderer.render(scene, camera);
   api.snapshot = () => {
     renderer.render(scene, camera);
     return renderer.domElement.toDataURL('image/png');
@@ -291,7 +301,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
     zoneShader = createZoneShader(skinMaterial, registry.atlasImage, registry.atlasSize);
     markerLayer = new MarkerLayer(headMesh, scene);
 
-    api.sync(view.markers, view.selectedId, view.hoverZoneId, view.groups, view.activeGroupId);
+    api.sync(view.markers, view.selectedId, view.hoverZoneId, view.groups, view.isolateGroupId);
     if (view.xray) api.setXray(true);
     setCamera(DEFAULT_CAMERA.theta, DEFAULT_CAMERA.phi, DEFAULT_CAMERA.dist);
   });

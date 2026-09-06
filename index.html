@@ -99,6 +99,10 @@
       <span>HeadPain helps you describe pain: it cannot diagnose. Sudden or worst-ever headache is an emergency.</span>
     </div>
 
+    <!-- The pain bar sits above the head, not inside a panel: which pain you are
+         adding to is the first decision, so it is the first thing on the page. -->
+    <div id="pain-bar" class="pain-bar" aria-label="Pains in this episode"></div>
+
     <div class="app-layout">
       <section id="stage" class="stage" aria-label="3D head pain map">
         <div id="stage-loader" class="stage-loader" aria-live="polite">
@@ -112,29 +116,25 @@
         <div id="zone-tooltip" class="zone-tooltip" hidden></div>
         <div class="stage-toolbar" role="toolbar" aria-label="View controls">
           <button type="button" class="chip-btn" id="btn-xray" aria-pressed="false" title="See deep pain columns (X)">X-ray</button>
-          <button type="button" class="chip-btn" id="btn-reset-view" title="Back to front view (R)">Reset view</button>
-          <button type="button" class="chip-btn" id="btn-png" title="Download a PNG of this view">PNG</button>
+          <button type="button" class="chip-btn" id="btn-isolate" aria-pressed="false" disabled title="Add a second pain to isolate one of them">Isolate</button>
+          <button type="button" class="chip-btn" id="btn-reset-view" title="Back to front view (R)">Reset<span class="wide-only"> view</span></button>
+          <button type="button" class="chip-btn" id="btn-png" title="Download a PNG of this view, legend included">PNG</button>
+          <button type="button" class="chip-btn" id="btn-explain" aria-pressed="false" title="Read-only view for showing someone else (E)">Explain</button>
         </div>
         <div class="stage-hint" id="stage-hint">Tap the head to drop a pain point</div>
+        <div id="stage-legend" class="stage-legend" aria-hidden="true"></div>
       </section>
 
       <aside class="panel" aria-label="Pain map panels">
         <div class="tabs" role="tablist" aria-label="Panels">
           <button type="button" class="tab active" id="tab-map" role="tab" aria-selected="true" aria-controls="panel-map">Map</button>
-          <button type="button" class="tab" id="tab-conditions" role="tab" aria-selected="false" aria-controls="panel-conditions">Conditions</button>
-          <button type="button" class="tab" id="tab-demos" role="tab" aria-selected="false" aria-controls="panel-demos">Demos</button>
-          <button type="button" class="tab" id="tab-episodes" role="tab" aria-selected="false" aria-controls="panel-episodes">Episodes</button>
+          <button type="button" class="tab" id="tab-impact" role="tab" aria-selected="false" aria-controls="panel-impact">Impact</button>
+          <button type="button" class="tab" id="tab-conditions" role="tab" aria-selected="false" aria-controls="panel-conditions">Patterns</button>
+          <button type="button" class="tab" id="tab-episodes" role="tab" aria-selected="false" aria-controls="panel-episodes">Diary</button>
         </div>
 
         <section id="panel-map" class="tabpanel active" role="tabpanel" aria-labelledby="tab-map" tabindex="0">
           <div id="editor"></div>
-          <div class="panel-block">
-            <div class="panel-block-head">
-              <h2>Groups <span class="pill" id="groups-count">0</span></h2>
-              <button type="button" class="btn btn--ghost btn--sm" id="btn-new-group">New group</button>
-            </div>
-            <div id="groups"></div>
-          </div>
           <div class="panel-block">
             <div class="panel-block-head">
               <h2>Points <span class="pill" id="points-count">0</span></h2>
@@ -148,13 +148,17 @@
           </div>
         </section>
 
+        <!-- Impact: what the pain costs. The half of a consultation a map cannot carry. -->
+        <section id="panel-impact" class="tabpanel" role="tabpanel" aria-labelledby="tab-impact" tabindex="0">
+          <div id="impact"></div>
+        </section>
+
+        <!-- Patterns absorbed the old Demos tab: a demo is an example pattern,
+             and two of four tabs were not the task. -->
         <section id="panel-conditions" class="tabpanel" role="tabpanel" aria-labelledby="tab-conditions" tabindex="0">
           <div id="matches"></div>
           <div id="redflags"></div>
           <div id="library"></div>
-        </section>
-
-        <section id="panel-demos" class="tabpanel" role="tabpanel" aria-labelledby="tab-demos" tabindex="0">
           <div id="demos"></div>
         </section>
 
@@ -162,6 +166,10 @@
           <div id="episodes"></div>
         </section>
       </aside>
+
+      <!-- Explain view: the same scene and the same legend model, with the
+           editor removed. What a share link opens for the person you sent it to. -->
+      <aside id="explain-panel" class="explain-panel" aria-label="What this map says"></aside>
     </div>
   </main>
 

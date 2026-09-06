@@ -1,18 +1,22 @@
-// HeadPain state — episodes diary (state v2). Everything stays in localStorage;
-// nothing leaves the browser unless the user exports or shares a link.
+// HeadPain state — the live model: episodes, the pains inside them, and the
+// points inside those. Everything stays in localStorage; nothing leaves the
+// browser unless the user exports or shares a link.
+//
+// Reading a diary in and writing one out lives in persist.js, which imports
+// from here. Nothing here imports from there.
 
-import { safeJsonParse } from './utils.js';
-import { GROUP_COLORS, nextGroupColor, colorIndexOf } from './groups.js';
+import { GROUP_COLORS, nextGroupColor, nextGroupPattern } from './groups.js';
+import { isPattern } from './patterns.js';
+import { emptyImpact, normalizeImpact } from './impact.js';
 
-const STORAGE_KEY = 'headmap-v2';
-const URL_MARKER_CAP = 12; // keep share links a sane length; JSON export for dense maps
+export const STORAGE_KEY = 'headmap-v2';
 
 let uidCounter = 0;
 export function uid(prefix = 'id') {
   return `${prefix}-${Date.now().toString(36)}-${(uidCounter++).toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
 }
 
-function defaultMarker(partial = {}) {
+export function defaultMarker(partial = {}) {
   return {
     id: uid('m'),
     zoneId: partial.zoneId || null,       // derived at placement; informational
@@ -27,16 +31,36 @@ function defaultMarker(partial = {}) {
   };
 }
 
-function defaultGroup(partial = {}, groups = []) {
+export function defaultGroup(partial = {}, groups = []) {
+  const color = GROUP_COLORS.includes(partial.color) ? partial.color : nextGroupColor(groups);
   return {
     id: uid('g'),
-    name: String(partial.name || `Group ${groups.length + 1}`).slice(0, 60),
-    color: GROUP_COLORS.includes(partial.color) ? partial.color : nextGroupColor(groups),
+    name: String(partial.name || `Pain ${groups.length + 1}`).slice(0, 60),
+    color,
+    pattern: isPattern(partial.pattern) ? partial.pattern : nextGroupPattern(groups, color),
     conditionId: partial.conditionId || null // set when seeded from the pattern library
   };
 }
 
-function defaultEpisode(title, markers = [], groups = []) {
+// Every marker belongs to a pain. Maps written before pains existed (and any
+// share link or JSON file from that era) carry loose markers, so they are
+// adopted into one pain on the way in rather than left in a state the renderer
+// and the legend have no colour for.
+export const ORPHAN_PAIN_NAME = 'My pain';
+
+export function adoptOrphans(ep) {
+  const orphans = ep.markers.filter(m => !m.groupId || !ep.groups.some(g => g.id === m.groupId));
+  if (!orphans.length) return ep;
+  let home = ep.groups.find(g => g.name === ORPHAN_PAIN_NAME);
+  if (!home) {
+    home = defaultGroup({ name: ORPHAN_PAIN_NAME }, ep.groups);
+    ep.groups.push(home);
+  }
+  for (const m of orphans) m.groupId = home.id;
+  return ep;
+}
+
+export function defaultEpisode(title, markers = [], groups = []) {
   const now = new Date().toISOString();
   return {
     id: uid('ep'),
@@ -44,6 +68,7 @@ function defaultEpisode(title, markers = [], groups = []) {
     createdAt: now,
     updatedAt: now,
     camera: { theta: 0, phi: Math.PI / 2, dist: 4.9 },
+    impact: emptyImpact(),   // how often, how long, what it stops you doing
     groups,
     markers
   };
@@ -56,8 +81,10 @@ function defaultState() {
     episodes: [ep],
     activeEpisodeId: ep.id,
     selectedMarkerId: null,
-    activeGroupId: null,   // focused group: new points join it, others dim on the head
+    activeGroupId: null,   // the pain new points join; always set once a pain exists
+    isolateGroupId: null,  // show this pain alone; null shows every pain
     view: 'normal',
+    explain: false,        // read-only presentation: the map, its legend, no editor
     shared: false
   };
 }
@@ -77,7 +104,8 @@ export function createEpisode(title) {
   state.episodes.unshift(ep);
   state.activeEpisodeId = ep.id;
   state.selectedMarkerId = null;
-  state.activeGroupId = null;
+  state.isolateGroupId = null;
+  ensureActivePain();
   return ep;
 }
 
@@ -85,8 +113,21 @@ export function loadEpisode(id) {
   if (!state.episodes.some(e => e.id === id)) return false;
   state.activeEpisodeId = id;
   state.selectedMarkerId = null;
-  state.activeGroupId = null;
+  state.isolateGroupId = null;
+  ensureActivePain();
   return true;
+}
+
+// Keeps "which pain do new points join" pointing at something real: the current
+// choice if it still exists, otherwise the first pain, otherwise nothing (an
+// empty episode, where the first tap creates one).
+export function ensureActivePain() {
+  const ep = activeEpisode();
+  if (!ep) { state.activeGroupId = null; return null; }
+  if (!ep.groups.some(g => g.id === state.activeGroupId)) {
+    state.activeGroupId = ep.groups[0]?.id || null;
+  }
+  return state.activeGroupId;
 }
 
 export function deleteEpisode(id) {
@@ -95,7 +136,8 @@ export function deleteEpisode(id) {
   if (state.activeEpisodeId === id) {
     state.activeEpisodeId = state.episodes[0].id;
     state.selectedMarkerId = null;
-    state.activeGroupId = null;
+    state.isolateGroupId = null;
+    ensureActivePain();
   }
 }
 
@@ -119,8 +161,8 @@ function touch() {
 export function addMarker(partial) {
   const ep = activeEpisode();
   if (!ep) return null;
-  if (partial.groupId === undefined && state.activeGroupId) {
-    partial = { ...partial, groupId: state.activeGroupId };
+  if (partial.groupId === undefined) {
+    partial = { ...partial, groupId: ensureActivePain() };
   }
   const marker = defaultMarker(partial);
   ep.markers.push(marker);
@@ -139,7 +181,7 @@ export function updateMarker(id, updates) {
   if (updates.spread !== undefined) m.spread = updates.spread;
   if (updates.note !== undefined) m.note = String(updates.note).slice(0, 500);
   if (updates.zoneId !== undefined) m.zoneId = updates.zoneId;
-  if (updates.groupId !== undefined) m.groupId = ep.groups.some(g => g.id === updates.groupId) ? updates.groupId : null;
+  if (updates.groupId !== undefined && ep.groups.some(g => g.id === updates.groupId)) m.groupId = updates.groupId;
   touch();
 }
 
@@ -190,37 +232,47 @@ export function renameGroup(id, name) {
   }
 }
 
-export function setGroupColor(id, color) {
+export function setGroupStyle(id, { color, pattern } = {}) {
   const ep = activeEpisode();
   const g = ep?.groups.find(g => g.id === id);
-  if (g && GROUP_COLORS.includes(color)) {
-    g.color = color;
-    touch();
-  }
+  if (!g) return;
+  if (GROUP_COLORS.includes(color)) g.color = color;
+  if (isPattern(pattern)) g.pattern = pattern;
+  touch();
 }
 
-// Points stay on the map — deleting a group only ungroups them.
+// Deleting a pain deletes its points with it. Keeping them would leave markers
+// with no pain, which is exactly the state that made a red blob ambiguous; the
+// confirm in events.js names the count before this runs.
 export function removeGroup(id) {
   const ep = activeEpisode();
   if (!ep) return;
   ep.groups = ep.groups.filter(g => g.id !== id);
-  for (const m of ep.markers) if (m.groupId === id) m.groupId = null;
-  if (state.activeGroupId === id) state.activeGroupId = null;
+  ep.markers = ep.markers.filter(m => m.groupId !== id);
+  if (state.selectedMarkerId && !ep.markers.some(m => m.id === state.selectedMarkerId)) {
+    state.selectedMarkerId = null;
+  }
+  if (state.isolateGroupId === id) state.isolateGroupId = null;
+  ensureActivePain();
   touch();
 }
 
-export function clearGroups() {
+// Wipes the map back to empty: used when a library pattern replaces it.
+export function resetMap() {
   const ep = activeEpisode();
   if (!ep) return;
   ep.groups = [];
+  ep.markers = [];
+  state.selectedMarkerId = null;
   state.activeGroupId = null;
-  for (const m of ep.markers) m.groupId = null;
+  state.isolateGroupId = null;
   touch();
 }
 
 export function setActiveGroup(id) {
   const ep = activeEpisode();
-  state.activeGroupId = id && ep?.groups.some(g => g.id === id) ? id : null;
+  if (id && ep?.groups.some(g => g.id === id)) state.activeGroupId = id;
+  else ensureActivePain();
 }
 
 export function activeGroup() {
@@ -228,8 +280,44 @@ export function activeGroup() {
   return ep?.groups.find(g => g.id === state.activeGroupId) || null;
 }
 
+// Isolation is a *viewing* choice, kept apart from which pain new points join.
+// Conflating the two was why "click the group again to release" also silently
+// moved where the next tap would land.
+export function setIsolateGroup(id) {
+  const ep = activeEpisode();
+  state.isolateGroupId = id && ep?.groups.some(g => g.id === id) ? id : null;
+}
+
+export function isolatedGroup() {
+  const ep = activeEpisode();
+  return ep?.groups.find(g => g.id === state.isolateGroupId) || null;
+}
+
+// One impact record per episode: it describes the pain as a whole, not a point.
+export function updateImpact(patch) {
+  const ep = activeEpisode();
+  if (!ep) return;
+  ep.impact = normalizeImpact({ ...ep.impact, ...patch });
+  touch();
+}
+
+// Checkbox-style fields: the same click adds or removes.
+export function toggleImpactOption(key, id) {
+  const ep = activeEpisode();
+  if (!ep) return;
+  const current = ep.impact?.[key] || [];
+  updateImpact({ [key]: current.includes(id) ? current.filter(v => v !== id) : [...current, id] });
+}
+
 export function setView(view) {
   state.view = view === 'xray' ? 'xray' : 'normal';
+}
+
+// Explain mode is a way of *reading* a map, so it is deliberately not persisted
+// and not part of an episode: a link carries it, the diary does not.
+export function setExplain(on) {
+  state.explain = Boolean(on);
+  document.body.classList.toggle('explain-mode', state.explain);
 }
 
 export function setCamera(theta, phi, dist) {
@@ -241,214 +329,8 @@ export function replaceMarkers(markerList) {
   const ep = activeEpisode();
   if (!ep) return;
   ep.markers = markerList.map(m => defaultMarker(m));
-  state.selectedMarkerId = ep.markers[0]?.id || null;
+  adoptOrphans(ep);
+  state.selectedMarkerId = null;
+  ensureActivePain();
   touch();
-}
-
-// ---------------------------------------------------------------------------
-// Serialization — compact for URL hash, verbose for JSON files
-// ---------------------------------------------------------------------------
-
-const DEPTH_IDS = ['surface', 'muscle', 'deep-pressure', 'inside-head'];
-const SPREAD_IDS = ['pinpoint', 'small', 'regional', 'diffuse'];
-const QUALITY_IDS = ['throbbing', 'band-pressure', 'stabbing', 'burning', 'electric', 'dull-ache', 'sharp', 'tender-touch', 'fullness', 'ice-pick'];
-
-const round3 = n => Math.round(n * 1000) / 1000;
-
-export function serializeForUrl(zoneIndexOf) {
-  const ep = activeEpisode();
-  if (!ep) return null;
-  const groupIndex = new Map(ep.groups.map((g, i) => [g.id, i]));
-  return {
-    v: 2,
-    t: ep.title,
-    c: [round3(ep.camera.theta), round3(ep.camera.phi), round3(ep.camera.dist)],
-    g: ep.groups.map(g => [g.name, colorIndexOf(g.color), g.conditionId || '']),
-    m: ep.markers.slice(0, URL_MARKER_CAP).map(m => [
-      m.zoneId ? zoneIndexOf(m.zoneId) : -1,
-      ...m.p.map(round3), ...m.n.map(round3),
-      m.intensity,
-      DEPTH_IDS.indexOf(m.depth),
-      m.quality ? QUALITY_IDS.indexOf(m.quality) : -1,
-      SPREAD_IDS.indexOf(m.spread),
-      m.note || '',
-      m.groupId ? (groupIndex.get(m.groupId) ?? -1) : -1
-    ])
-  };
-}
-
-export function loadFromUrlPayload(payload, zoneIdAt) {
-  if (!payload || payload.v !== 2) return false;
-  const groups = (Array.isArray(payload.g) ? payload.g : [])
-    .filter(r => Array.isArray(r) && typeof r[0] === 'string')
-    .map(r => defaultGroup({
-      name: r[0],
-      color: GROUP_COLORS[r[1]] || null,
-      conditionId: typeof r[2] === 'string' && r[2] ? r[2] : null
-    }));
-  const markers = (Array.isArray(payload.m) ? payload.m : [])
-    .filter(r => Array.isArray(r) && r.length >= 10)
-    .map(r => defaultMarker({
-      zoneId: r[0] >= 0 ? zoneIdAt(r[0]) : null,
-      p: [r[1], r[2], r[3]].map(Number),
-      n: [r[4], r[5], r[6]].map(Number),
-      intensity: Number(r[7]) || 0,
-      depth: DEPTH_IDS[r[8]] || 'surface',
-      quality: r[9] >= 0 ? QUALITY_IDS[r[9]] : null,
-      spread: SPREAD_IDS[r[10]] || 'small',
-      note: typeof r[11] === 'string' ? r[11] : '',
-      groupId: r[12] >= 0 && groups[r[12]] ? groups[r[12]].id : null
-    }));
-  const ep = defaultEpisode(typeof payload.t === 'string' ? payload.t : 'Shared map', markers, groups);
-  if (Array.isArray(payload.c)) {
-    ep.camera = { theta: Number(payload.c[0]) || 0, phi: Number(payload.c[1]) || Math.PI / 2, dist: Number(payload.c[2]) || 4.9 };
-  }
-  state.episodes = [ep];
-  state.activeEpisodeId = ep.id;
-  state.selectedMarkerId = markers[0]?.id || null;
-  state.activeGroupId = null;
-  state.shared = true; // don't persist until absorbShared() merges the diary back
-  return true;
-}
-
-// Called before the first mutation after opening a shared link: restores any
-// locally stored episodes underneath the shared one, then normal saving resumes.
-export function absorbShared() {
-  if (!state.shared) return;
-  state.shared = false;
-  try {
-    const stored = safeJsonParse(localStorage.getItem(STORAGE_KEY), null);
-    if (stored?.v === 2 && Array.isArray(stored.episodes)) {
-      const ids = new Set(state.episodes.map(e => e.id));
-      state.episodes.push(...stored.episodes.filter(e => !ids.has(e.id)).map(normalizeEpisode));
-    }
-  } catch {
-    // no stored diary — the shared episode becomes the diary
-  }
-}
-
-// Verbose JSON (files): human-readable field names.
-export function episodeToJson(ep) {
-  return {
-    headmapVersion: 2,
-    kind: 'headmap-episode',
-    title: ep.title,
-    createdAt: ep.createdAt,
-    updatedAt: ep.updatedAt,
-    groups: ep.groups.map(g => ({ id: g.id, name: g.name, color: g.color, condition: g.conditionId })),
-    markers: ep.markers.map(m => ({
-      zone: m.zoneId,
-      position: m.p.map(round3),
-      normal: m.n.map(round3),
-      intensity: m.intensity,
-      depth: m.depth,
-      quality: m.quality,
-      spread: m.spread,
-      note: m.note,
-      group: m.groupId
-    }))
-  };
-}
-
-export function allToJson() {
-  return {
-    headmapVersion: 2,
-    kind: 'headmap-export',
-    exportedAt: new Date().toISOString(),
-    episodes: state.episodes.map(episodeToJson)
-  };
-}
-
-export function importJson(payload) {
-  const list = payload?.kind === 'headmap-export' ? payload.episodes
-    : payload?.kind === 'headmap-episode' ? [payload]
-    : null;
-  if (!Array.isArray(list) || !list.length) return 0;
-  let imported = 0;
-  for (const raw of list) {
-    if (!raw || !Array.isArray(raw.markers)) continue;
-    // Map the file's group ids to fresh ones so marker references survive.
-    const groups = [];
-    const groupIdMap = new Map();
-    for (const g of Array.isArray(raw.groups) ? raw.groups : []) {
-      if (!g || typeof g.name !== 'string') continue;
-      const fresh = defaultGroup({ name: g.name, color: g.color, conditionId: g.condition || null });
-      groups.push(fresh);
-      if (g.id) groupIdMap.set(g.id, fresh.id);
-    }
-    const ep = defaultEpisode(String(raw.title || 'Imported map'), [], groups);
-    ep.createdAt = raw.createdAt || ep.createdAt;
-    ep.markers = raw.markers.map(m => defaultMarker({
-      zoneId: m.zone || null,
-      p: Array.isArray(m.position) ? m.position.map(Number) : [0, 0, 1],
-      n: Array.isArray(m.normal) ? m.normal.map(Number) : [0, 0, 1],
-      intensity: m.intensity,
-      depth: DEPTH_IDS.includes(m.depth) ? m.depth : 'surface',
-      quality: QUALITY_IDS.includes(m.quality) ? m.quality : null,
-      spread: SPREAD_IDS.includes(m.spread) ? m.spread : 'small',
-      note: m.note || '',
-      groupId: groupIdMap.get(m.group) || null
-    }));
-    state.episodes.unshift(ep);
-    state.activeEpisodeId = ep.id;
-    state.activeGroupId = null;
-    imported++;
-  }
-  return imported;
-}
-
-// ---------------------------------------------------------------------------
-// Persistence
-// ---------------------------------------------------------------------------
-
-function normalizeEpisode(ep) {
-  const groups = (Array.isArray(ep.groups) ? ep.groups : [])
-    .filter(g => g && g.id && typeof g.name === 'string')
-    .map(g => ({ id: g.id, name: g.name, color: GROUP_COLORS.includes(g.color) ? g.color : GROUP_COLORS[0], conditionId: g.conditionId || null }));
-  const groupIds = new Set(groups.map(g => g.id));
-  return {
-    ...defaultEpisode(ep.title),
-    ...ep,
-    groups,
-    markers: (ep.markers || []).map(m => {
-      const marker = defaultMarker(m);
-      if (marker.groupId && !groupIds.has(marker.groupId)) marker.groupId = null;
-      return marker;
-    })
-  };
-}
-
-export function saveToStorage() {
-  if (state.shared) return; // viewing a shared link — never overwrite the local diary
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      v: 2,
-      episodes: state.episodes,
-      activeEpisodeId: state.activeEpisodeId,
-      view: state.view
-    }));
-  } catch {
-    // storage full or unavailable — session continues without persistence
-  }
-}
-
-export function loadFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const payload = safeJsonParse(raw, null);
-    if (!payload || payload.v !== 2 || !Array.isArray(payload.episodes) || !payload.episodes.length) return false;
-    state.episodes = payload.episodes.map(normalizeEpisode);
-    state.activeEpisodeId = state.episodes.some(e => e.id === payload.activeEpisodeId)
-      ? payload.activeEpisodeId : state.episodes[0].id;
-    state.view = payload.view === 'xray' ? 'xray' : 'normal';
-    state.selectedMarkerId = null;
-    state.activeGroupId = null;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function resetToDefaults() {
-  Object.assign(state, defaultState());
 }

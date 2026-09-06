@@ -1,6 +1,8 @@
 # CLAUDE.md: Headpain
 
-HeadPain: 3D head pain mapper with color-coded pain groups, demo gallery, intensity guidance, and shareable export (headpain.neorgon.com)
+HeadPain: 3D head pain mapper. Colour-and-shape coded pains, a legend that
+travels with every artifact, life-impact capture, an embeddable read-only view,
+and a browsable library of published headache patterns (headpain.neorgon.com)
 
 **Live:** headpain.neorgon.com · **Port:** 8846
 
@@ -12,32 +14,66 @@ make serve
 
 Then open http://localhost:8846. It must be served over HTTP. The app is ES modules, and `file://` blocks them.
 
+## Pages
+
+| Page | What it is |
+|---|---|
+| `index.html` | The app. `?explain=1` opens read-only, `?learn=<pattern>` opens a library pattern read-only. |
+| `embed.html` | The embeddable widget. Never reads localStorage; renders only what its URL carries. |
+| `embed-builder.html` | A form that writes the iframe snippet, with a live preview and a working postMessage console. |
+
 ## Architecture
 
 | Module | Lines | Owns |
 |---|---:|---|
-| `js/state.js` | 455 | `uid`, `state`, `activeEpisode`, `createEpisode`, `loadEpisode` |
-| `js/conditions.js` | 379 | `CONDITIONS`, `MATCHER_DISCLAIMER`, `CARD_DISCLAIMER`, `CONGENITAL_NOTE`, `MATCH_CAP_NOTE` |
-| `js/events.js` | 355 | `initApp` |
-| `js/head3d.js` | 304 | `createHead3D` |
-| `js/editor.js` | 288 | `renderEditor`, `renderPointsList`, `renderGroups`, `renderZoneBrowser` |
-| `js/markers.js` | 222 | `MarkerLayer` |
-| `js/zones.js` | 200 | `ZONES`, `VIRTUAL_ZONES`, `ZONE_GROUPS`, `DEPTHS`, `QUALITIES` |
-| `js/panel-conditions.js` | 126 | `renderMatches`, `renderRedFlags`, `renderLibrary` |
-| `js/picking.js` | 86 | `buildLut`, `nearestPatch`, `pickZone` |
-| `js/utils.js` | 83 | `$`, `$$`, `clamp`, `lerp`, `debounce` |
-| `js/panel-episodes.js` | 76 | `renderEpisodes` |
-| `js/zoneshader.js` | 73 | `createZoneShader` |
-| `js/demos.js` | 54 | `DEMOS` |
-| `js/registry.js` | 46 | `loadRegistry` |
-| `js/groups.js` | 45 | `GROUP_COLORS`, `nextGroupColor`, `cycleColor`, `colorIndexOf`, `hexToRgb` |
-| `js/export.js` | 44 | `exportEpisodeJson`, `exportAllJson`, `buildShareUrl`, `downloadPng` |
-| `js/guidance.js` | 37 | `ROOT_CAUSE_NOTE`, `guidanceFor` |
-| `js/panel-demos.js` | 33 | `renderDemos` |
-| `js/app.js` | 31 | none |
-| `js/render.js` | 28 | `renderAll` |
+| `js/events.js` | 452 | `initApp`, every action the UI calls |
+| `js/conditions.js` | 378 | `CONDITIONS`, `scoreConditions`, the disclaimers |
+| `js/state.js` | 333 | the live model: `state`, episodes, pains, markers, impact |
+| `js/head3d.js` | 313 | `createHead3D`: renderer, camera, picking, zone tint |
+| `js/persist.js` | 273 | localStorage, JSON files, share-link payloads |
+| `js/legend.js` | 262 | `buildLegend`, `legendHtml`, `drawLegendPng` |
+| `js/embed.js` | 217 | the embed's boot, URL contract and postMessage API |
+| `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
+| `js/markers.js` | 213 | `MarkerLayer`: decals, depth geometry, pattern textures |
+| `js/zones.js` | 202 | `ZONES`, `DEPTHS`, `QUALITIES`, `SPREADS`, intensity bands |
+| `js/patterns.js` | 188 | `PATTERNS`, `drawPattern` (canvas), `patternSvg` (DOM) |
+| `js/impact.js` | 172 | the impact vocabulary and `impactSentences` |
+| `js/panel-impact.js` | 171 | the impact form, the prose summary, the trend strip |
+| `js/painbar.js` | 150 | `renderPainBar`, inline rename, the colour/shape popover |
+| `js/panel-conditions.js` | 142 | `renderMatches`, `renderRedFlags`, `renderLibrary` |
+| `js/groups.js` | 137 | `GROUP_COLORS`, `paint`, `markerColor`, `markerPattern` |
+| `js/embed-builder.js` | 104 | the builder form and its postMessage console |
+| `js/presets.js` | 98 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
+| `js/panel-episodes.js` | 89 | `renderEpisodes` |
+| `js/picking.js` | 85 | `buildLut`, `nearestPatch`, `pickZone` |
+| `js/panel-explain.js` | 82 | `renderExplain` |
+| `js/zoneshader.js` | 72 | `createZoneShader` |
+| `js/export.js` | 63 | JSON downloads, share URLs, the composited PNG |
+| `js/demos.js` | 53 | `DEMOS` |
+| `js/utils.js` | 45 | `$`, `$$`, `clamp`, `escHtml`, base64url helpers |
+| `js/registry.js` | 45 | `loadRegistry` |
+| `js/render.js` | 47 | `renderAll` |
+| `js/guidance.js` | 36 | `ROOT_CAUSE_NOTE`, `guidanceFor` |
+| `js/panel-demos.js` | 40 | `renderDemos` (rendered inside the Patterns tab) |
+| `js/app.js` | 31 | boot |
 
-Vendored from `packages/neorgon-ui/`: never edit in place, run the sync script instead: `js/neorgon-footer.js`, `js/neorgon-header.js`.
+Vendored from `packages/neorgon-ui/`: never edit in place, run the sync script instead: `js/neorgon-footer.js`, `js/neorgon-header.js`, `js/neorgon-dom.js`.
+
+## The visual grammar
+
+Three channels, three meanings. Breaking this is the fastest way to make a map
+unreadable, and it is exactly what was wrong before 2026-09-05.
+
+| Channel | Meaning | Where |
+|---|---|---|
+| hue **and** pattern glyph | which pain this is | `groups.js`, `patterns.js` |
+| saturation, decal size, opacity | how intense | `paint()` in `groups.js` |
+| sub-surface geometry (ring, column, nail-spike) | how deep | `markers.js` |
+| jagged rim on the glyph | a stabbing quality | `drawPattern(id, spiky)` |
+
+Colour alone is not enough: it is gone in greyscale, on a printout, and for a
+red-green colour-blind reader. That is why every pain owns a shape too, and why
+the legend spells both out in words ("sky, ringed").
 
 ## Data
 
@@ -47,11 +83,41 @@ Vendored from `packages/neorgon-ui/`: never edit in place, run the sync script i
 
 - Zero build step. Plain ES modules loaded by `js/app.js`.
 - Header and footer come from the shared kits. Do not add site-local `.neo-footer` or `.header-bar` CSS.
-- No single JS file over ~500 lines. It currently holds.
+- No single JS file over ~500 lines. `state.js` broke it once and `persist.js` is the split that fixed it.
+- `state.js` is the live model; `persist.js` is every path in or out. persist imports state, never the reverse.
 
 ## Gotchas
 
-TODO: the non-obvious failures. What broke here before, what looks wrong but is deliberate, what a reasonable change would break. This is the highest-value section, leave it empty rather than filling it with generic advice.
+- **Every marker belongs to a pain. Keep it that way.** `markerColor()` resolves
+  through the group with no fallback, so a marker with a dangling `groupId`
+  renders in the wrong hue rather than a neutral one. `adoptOrphans()` in
+  `state.js` enforces it on every way in (localStorage, JSON import, share link,
+  preset), and the intensity colour ramp was deleted from `utils.js` so nobody
+  can reintroduce the old "grouped means group colour, ungrouped means intensity"
+  ambiguity by reaching for it.
+- **`activeGroupId` and `isolateGroupId` are different things.** The first is
+  where new points land, the second is what you are looking at. They used to be
+  one field, which meant looking at one pain silently redirected the next tap.
+- **`btoa` is Latin-1 only.** `base64UrlEncode` goes through `TextEncoder` for
+  exactly this reason: one curly apostrophe in a note used to throw
+  `InvalidCharacterError` out of the click handler and leave "Copy share link" a
+  dead button with no toast. iOS types that apostrophe by default. The decoder
+  falls back to the raw binary string so links minted before the fix still open.
+- **Share links truncate at `URL_MARKER_CAP` (12).** `shareWouldTruncate()` exists
+  so the toast can say so. Do not raise the cap without measuring the URL length.
+- **Any episode-shaped object needs `camera`.** `plainEpisode()` in `presets.js`
+  omitted it once, and the boot threw inside `head.ready.then`, which the catch
+  reported to the user as a browser that cannot do 3D.
+- **Panels re-render on every `renderAll`.** A listener bound to a container that
+  survives re-render (rather than to the freshly written innerHTML) stacks up one
+  per past render. `panel-impact.js` guards with `el.dataset.wired`; copy that
+  pattern, do not invent a new one.
+- **The embed must never read localStorage.** A HeadPain widget on a third-party
+  page that could render the visitor's own diary is a privacy leak. `embed.js`
+  builds a plain episode from its URL and nothing else.
+- **The x-ray depth columns read poorly head-on.** A column pointing at the camera
+  projects to almost nothing. It is a known weakness of the depth encoding, not a
+  regression.
 
 ## Do not touch
 

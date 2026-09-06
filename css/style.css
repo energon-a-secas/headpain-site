@@ -769,3 +769,365 @@ textarea.note-input:focus { outline: none; border-color: var(--accent); }
   .loader { animation: none; }
   * { transition: none !important; }
 }
+
+/* ── Pain bar ───────────────────────────────────────────────────────────────
+   One chip per pain, above the head. It replaced a "Groups" block buried under
+   the point editor, where the pain you were adding to was the last thing the
+   flow let you choose. Each chip carries the pain's colour *and* its shape, so
+   the strip doubles as the map's legend while you build it. */
+.pain-bar {
+  flex-shrink: 0;
+  position: relative;
+  padding: 8px var(--space-5);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.pain-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 34px;
+}
+.pain-bar-label {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pain-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+.pain-empty { font-size: 0.82rem; color: var(--text-muted); }
+
+.pain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 6px 4px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: border-color var(--dur), background var(--dur), opacity var(--dur);
+}
+.pain-chip:hover { background: var(--surface-3); }
+.pain-chip:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+.pain-chip.active {
+  border-color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+.pain-chip.faded { opacity: 0.45; }
+.pain-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pain-chip.active .pain-name { cursor: text; }
+.pain-count {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border-radius: 999px;
+  padding: 0 6px;
+  min-width: 18px;
+  text-align: center;
+}
+.pain-style,
+.pain-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  line-height: 1;
+}
+.pain-style { padding: 3px; }
+.pain-style:hover { background: var(--surface-3); }
+.pain-del { font-size: 1rem; width: 20px; height: 20px; }
+.pain-del:hover { background: var(--danger-soft); color: var(--danger); }
+.pain-rename {
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  background: var(--bg);
+  color: var(--text-primary);
+  border: 1px solid var(--accent-bright);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  min-width: 8ch;
+}
+.pain-add {
+  flex-shrink: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.pain-add:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+
+/* Colour and shape in one popover: two rows, no eight-click swatch cycle. */
+.style-pop {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% - 4px);
+  left: var(--space-5);
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: #0b1120;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+.style-pop-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.style-pop-title .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.style-row { display: flex; gap: 4px; margin-bottom: 8px; }
+.style-row:last-child { margin-bottom: 0; }
+.style-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.style-swatch:hover { background: var(--surface-3); }
+.style-swatch.on { border-color: var(--accent-bright); background: var(--accent-soft); }
+
+/* Pattern swatches wherever a pain is named. */
+.swatch { display: inline-flex; align-items: center; flex-shrink: 0; }
+.swatch svg, .pain-style svg, .chip--group svg, .demo-tag svg { display: block; }
+.editor-pain {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  padding-left: 2px;
+}
+.chip--group { display: inline-flex; align-items: center; gap: 5px; }
+.demo-tag { display: inline-flex; align-items: center; gap: 5px; }
+
+.chip-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.chip-btn[aria-pressed="true"] { border-color: var(--accent-bright); color: var(--accent-bright); }
+
+@media (max-width: 760px) {
+  .pain-bar { padding: 6px var(--space-3); }
+  .pain-bar-label { display: none; }
+  .style-pop { left: var(--space-3); right: var(--space-3); }
+  .style-row { flex-wrap: wrap; }
+}
+
+/* ── Legend ─────────────────────────────────────────────────────────────────
+   The key. It travels with every artifact: on the stage in explain view and in
+   the embed, and burned into the exported PNG by legend.js. Before it existed,
+   a map was readable only by the person who built it. */
+.stage-legend {
+  position: absolute;
+  left: var(--space-4);
+  bottom: var(--space-4);
+  max-width: min(340px, calc(100% - 32px));
+  pointer-events: none;
+  z-index: 4;
+}
+.stage-legend:empty { display: none; }
+.legend {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(7, 11, 22, 0.86);
+  backdrop-filter: blur(6px);
+}
+.legend-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: 8px;
+}
+.legend-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legend-count { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; flex-shrink: 0; }
+.legend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.legend-row { display: flex; align-items: flex-start; gap: 8px; }
+.legend-row.faded { opacity: 0.4; }
+.legend-glyph { flex-shrink: 0; margin-top: 1px; }
+.legend-text { display: grid; gap: 1px; min-width: 0; }
+.legend-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
+.legend-meta { font-size: 0.7rem; color: var(--text-muted); }
+.legend-prose { font-size: 0.74rem; color: var(--text-secondary); margin-top: 2px; }
+.legend-scale {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+.legend-ramp {
+  width: 54px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #b57e88, #f43f5e);
+}
+.legend-scale-note { margin-left: auto; text-align: right; }
+
+/* ── Explain view ───────────────────────────────────────────────────────────
+   Same scene, same legend model, editor removed. */
+.explain-panel { display: none; }
+body.explain-mode .panel { display: none; }
+body.explain-mode .explain-panel {
+  display: block;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg);
+}
+body.explain-mode .stage-hint,
+body.explain-mode .pain-add,
+body.explain-mode .pain-del,
+body.explain-mode .pain-style { display: none; }
+body.explain-mode .pain-bar-label::after { content: ' shown'; }
+
+.explain-inner { padding: var(--space-5); display: grid; gap: var(--space-3); }
+.explain-title { margin: 0; font-size: 1.15rem; font-weight: 700; }
+.explain-sub { margin: 0; font-size: 0.82rem; color: var(--text-muted); }
+.explain-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.explain-hint { font-size: 0.78rem; color: var(--text-muted); }
+.explain-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.explain-card-head { display: flex; align-items: center; gap: 8px; }
+.explain-card-name { font-size: 0.95rem; font-weight: 700; }
+.explain-card-peak {
+  margin-left: auto;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.explain-card-prose { margin: 8px 0 0; font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary); }
+.explain-card-prose strong { color: var(--text-primary); font-weight: 600; }
+.explain-fine { margin: var(--space-2) 0 0; }
+
+@media (max-width: 760px) {
+  .stage-legend { left: var(--space-2); bottom: var(--space-2); max-width: calc(100% - 16px); }
+  .legend-prose { display: none; }
+}
+
+/* ── Impact ─────────────────────────────────────────────────────────────────
+   The answer is shown as sentences above the questions, so the reason for
+   ticking a box is on screen while it is ticked. */
+.impact-summary {
+  margin: var(--space-3) 0 var(--space-4);
+  padding: 12px 14px;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+.impact-summary p { margin: 0 0 6px; font-size: 0.88rem; line-height: 1.6; color: var(--text-primary); }
+.impact-summary p:last-child { margin-bottom: 0; }
+.impact-summary--empty { border-style: dashed; background: none; }
+.impact-summary .muted { color: var(--text-muted); font-size: 0.84rem; }
+
+.explain-card--impact { border-color: rgba(16, 185, 129, 0.3); background: var(--accent-soft); }
+
+/* Trend: one bar per episode, height is the worst point, colour is the pain
+   that peaked. A diary of filenames cannot show a month getting worse. */
+.trend { display: grid; gap: 6px; }
+.trend-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 84px;
+  padding: 4px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.trend-bar {
+  flex: 1;
+  min-width: 5px;
+  border-radius: 2px 2px 0 0;
+  transition: filter var(--dur);
+}
+.trend-bar:hover { filter: brightness(1.25); }
+.trend-axis { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted); }
+.trend-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: 4px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.trend-stats strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+/* A pattern opened for reading carries its own explanation. */
+.explain-pattern { margin-top: 10px; }
+.explain-pattern p { margin: 8px 0 0; font-size: 0.82rem; line-height: 1.6; color: var(--text-secondary); }
+.explain-pattern strong { color: var(--text-primary); font-weight: 600; }
+
+/* ── Stage toolbar on small screens ─────────────────────────────────────────
+   The header kit sits at z-index 200 and the stage sticks at top:0 beneath it,
+   so a toolbar pinned to the stage's own top edge ends up *under* the header
+   and its buttons cannot be tapped. Drop it clear of the header band and trim
+   the labels so five controls fit one row at 375px. */
+.wide-only { display: inline; }
+
+@media (max-width: 760px) {
+  .stage-toolbar {
+    top: calc(var(--header-h-app, 56px) + var(--space-2));
+    left: var(--space-2);
+    right: var(--space-2);
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .stage-toolbar .chip-btn { font-size: 0.72rem; padding: 5px 9px; }
+  .wide-only { display: none; }
+}

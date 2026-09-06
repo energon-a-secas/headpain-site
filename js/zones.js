@@ -143,35 +143,38 @@ export const ZONE_GROUPS = {
 // Pain attribute metadata (labels + plain-language descriptions)
 // ---------------------------------------------------------------------------
 
+// `plain` is how someone says it out loud; `label` is the form field. The
+// legend builds its sentences from `plain` so an explain link reads like a
+// person talking rather than a filled-in form.
 export const DEPTHS = [
-  { id: 'surface', label: 'On the skin', short: 'Surface',
+  { id: 'surface', label: 'On the skin', short: 'Surface', plain: 'right on the skin',
     desc: 'Feels like it\'s on the scalp or skin: touching or brushing hair can set it off.' },
-  { id: 'muscle', label: 'In the muscle', short: 'Muscle',
+  { id: 'muscle', label: 'In the muscle', short: 'Muscle', plain: 'in the muscle',
     desc: 'Feels like a sore, tight muscle: a knot or clenched band.' },
-  { id: 'deep-pressure', label: 'Deep / on bone', short: 'Deep',
+  { id: 'deep-pressure', label: 'Deep / on bone', short: 'Deep', plain: 'deep against the bone',
     desc: 'Feels deep, like pressure pushing against the bone or from behind the face.' },
-  { id: 'inside-head', label: 'Inside the head', short: 'Inside',
+  { id: 'inside-head', label: 'Inside the head', short: 'Inside', plain: 'deep inside the head',
     desc: 'Feels like it\'s coming from deep inside the skull. Many common headaches feel this way too.' }
 ];
 
 export const QUALITIES = [
-  { id: 'throbbing', label: 'Throbbing', desc: 'Beats or pulses with the heartbeat' },
-  { id: 'band-pressure', label: 'Tight band', desc: 'Like a band or vice squeezing the head' },
-  { id: 'stabbing', label: 'Stabbing', desc: 'Sudden jabs, like being poked hard' },
-  { id: 'burning', label: 'Burning', desc: 'Hot, searing, or sunburn-like' },
-  { id: 'electric', label: 'Electric shock', desc: 'Like a lightning bolt or live wire' },
-  { id: 'dull-ache', label: 'Dull ache', desc: 'A constant, heavy, background ache' },
-  { id: 'sharp', label: 'Sharp', desc: 'Knife-like, cuts through' },
-  { id: 'tender-touch', label: 'Tender to touch', desc: 'Hurts when touched, pressed, or laid on' },
-  { id: 'fullness', label: 'Pressure / fullness', desc: 'Stuffed, swollen, about-to-burst feeling' },
-  { id: 'ice-pick', label: 'Ice-pick', desc: 'A split-second stab, gone before you react' }
+  { id: 'throbbing', label: 'Throbbing', plain: 'throbbing in time with the heartbeat', desc: 'Beats or pulses with the heartbeat' },
+  { id: 'band-pressure', label: 'Tight band', plain: 'like a tight band squeezing the head', desc: 'Like a band or vice squeezing the head' },
+  { id: 'stabbing', label: 'Stabbing', plain: 'sudden jabs, like being poked hard', desc: 'Sudden jabs, like being poked hard' },
+  { id: 'burning', label: 'Burning', plain: 'hot and burning', desc: 'Hot, searing, or sunburn-like' },
+  { id: 'electric', label: 'Electric shock', plain: 'like an electric shock', desc: 'Like a lightning bolt or live wire' },
+  { id: 'dull-ache', label: 'Dull ache', plain: 'a constant, heavy ache', desc: 'A constant, heavy, background ache' },
+  { id: 'sharp', label: 'Sharp', plain: 'sharp, like a knife', desc: 'Knife-like, cuts through' },
+  { id: 'tender-touch', label: 'Tender to touch', plain: 'sore to touch or to lie on', desc: 'Hurts when touched, pressed, or laid on' },
+  { id: 'fullness', label: 'Pressure / fullness', plain: 'a stuffed, about-to-burst pressure', desc: 'Stuffed, swollen, about-to-burst feeling' },
+  { id: 'ice-pick', label: 'Ice-pick', plain: 'a split-second stab, gone before you react', desc: 'A split-second stab, gone before you react' }
 ];
 
 export const SPREADS = [
-  { id: 'pinpoint', label: 'Pinpoint', desc: 'Smaller than a coin: one finger covers it', radius: 0.14 },
-  { id: 'small', label: 'Small area', desc: 'About the size of a palm', radius: 0.28 },
-  { id: 'regional', label: 'One region', desc: 'Covers a whole region (e.g. the whole temple)', radius: 0.5 },
-  { id: 'diffuse', label: 'Widespread', desc: 'Spreads across several regions', radius: 0.85 }
+  { id: 'pinpoint', label: 'Pinpoint', plain: 'in one small spot', desc: 'Smaller than a coin: one finger covers it', radius: 0.14 },
+  { id: 'small', label: 'Small area', plain: 'over about a palm-sized area', desc: 'About the size of a palm', radius: 0.28 },
+  { id: 'regional', label: 'One region', plain: 'across a whole region', desc: 'Covers a whole region (e.g. the whole temple)', radius: 0.5 },
+  { id: 'diffuse', label: 'Widespread', plain: 'spread over several regions', desc: 'Spreads across several regions', radius: 0.85 }
 ];
 
 export const INTENSITY_BANDS = [

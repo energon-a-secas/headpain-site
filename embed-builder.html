@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-season="off">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="neo-mark" content="on">
+  <title>Embed HeadPain | Put a 3D pain map in your own page</title>
+  <meta name="description" content="Build an iframe that shows a head pain map on your own site: pick a demo, a published headache pattern, or paste a HeadPain link. X-ray on or off, one pain at a time, driven by URL settings or postMessage.">
+  <meta property="og:title" content="Embed HeadPain in your own page">
+  <meta property="og:description" content="An iframe that explains head pain on a 3D head. Configure it here, copy the snippet, paste it into your page.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://headpain.neorgon.com/embed-builder.html">
+  <meta property="og:site_name" content="Neorgon">
+  <meta property="og:image" content="https://headpain.neorgon.com/og-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://headpain.neorgon.com/embed-builder.html">
+  <meta name="theme-color" content="#040714">
+  <link rel="stylesheet" href="https://cdn.neorgon.org/v1.0.0/styles/base.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script>(function(){var m=location.search.match(/[?&]theme=([\w-]+)/)||document.cookie.match(/(?:^|;\s*)neo_theme=([\w-]+)/);if(m&&m[1]!=='default')document.documentElement.dataset.theme=decodeURIComponent(m[1]);})();</script>
+  <link rel="stylesheet" href="css/neorgon-header.css">
+  <link rel="stylesheet" href="css/neorgon-themes.css">
+  <link rel="stylesheet" href="https://cdn.neorgon.org/v1.0.0/header/season.css">
+  <script defer src="js/neorgon-header.js"></script>
+  <meta name="neo-repo" content="energon-a-secas/headpain-site">
+  <link rel="stylesheet" href="css/neorgon-footer.css">
+  <script defer src="js/neorgon-footer.js"></script>
+  <link rel="stylesheet" href="css/builder.css">
+</head>
+<body class="builder-body">
+
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="header-bar" data-header-mode="content" data-header-skin="jade">
+    <div class="header-logo">
+      <a href="./" class="header-title-link">
+        <img src="energon-classic-logo.png" class="header-logo-img" alt="">
+        <div class="header-title-wrap">
+          <h1>HeadPain</h1>
+          <div class="header-subtitle">Embed a pain map in your page</div>
+        </div>
+      </a>
+    </div>
+    <div class="header-right">
+      <div class="header-actions">
+        <a class="btn btn--secondary btn--sm" href="./">Open the app</a>
+      </div>
+      <a class="header-home" href="https://neorgon.com/" title="neorgon.com" aria-label="Neorgon home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.4"/>
+          <ellipse cx="12" cy="12" rx="8.4" ry="3" transform="rotate(-18 12 12)"/>
+        </svg>
+      </a>
+    </div>
+  </header>
+
+  <main id="main" class="builder">
+    <section class="builder-intro">
+      <h2>Put a pain map inside your own page</h2>
+      <p>
+        The embed is the same 3D head and the same legend as the app, with the editor removed.
+        Use it to show a reader what a migraine looks like next to a sinus infection, to let them
+        turn the skin translucent and see how deep a pain sits, or to publish a map somebody made
+        of their own pain. Configure it below and copy the snippet. Nothing is uploaded: everything
+        the embed shows travels in the URL you paste.
+      </p>
+    </section>
+
+    <div class="builder-grid">
+      <form id="builder-form" class="builder-form" aria-label="Embed settings">
+        <fieldset>
+          <legend>What should it show?</legend>
+          <label class="fld">
+            <span>Source</span>
+            <select name="source">
+              <option value="demo">A demo map</option>
+              <option value="preset">A published headache pattern</option>
+              <option value="map">A HeadPain link of my own</option>
+            </select>
+          </label>
+          <label class="fld" data-source="demo"><span>Demo</span><select name="demo" id="f-demo"></select></label>
+          <label class="fld" data-source="preset"><span>Pattern</span><select name="preset" id="f-preset"></select></label>
+          <label class="fld" data-source="map">
+            <span>Paste a link</span>
+            <input type="text" name="map" placeholder="https://headpain.neorgon.com/#m=…">
+          </label>
+          <p class="fld-note" data-source="map" hidden>
+            Copy it from the app: <strong>Episodes → Copy link to show someone</strong>.
+            The map itself is inside the link, so the embed needs no account and no server.
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend>How should it look?</legend>
+          <label class="fld"><span>Caption</span><input type="text" name="title" placeholder="Leave blank to use the map's own title"></label>
+          <label class="fld">
+            <span>Legend</span>
+            <select name="legend">
+              <option value="compact">Compact: name, points, worst level</option>
+              <option value="full">Full: adds a plain-English description</option>
+              <option value="off">None</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span>Visitor controls</span>
+            <select name="controls">
+              <option value="view">X-ray, reset, and one pain at a time</option>
+              <option value="none">None: rotate and zoom only</option>
+            </select>
+          </label>
+          <label class="fld"><span>Show only this pain</span><input type="text" name="isolate" placeholder="Name or number, blank for all"></label>
+          <label class="fld"><span>Height in pixels</span><input type="number" name="height" value="460" min="240" max="900" step="20"></label>
+          <label class="fld"><span>Background</span><input type="text" name="bg" placeholder="e.g. 0b1120, blank for the default"></label>
+          <label class="fld fld--check"><input type="checkbox" name="xray"><span>Start with x-ray on</span></label>
+          <label class="fld fld--check"><input type="checkbox" name="rotate"><span>Turn the head slowly until the visitor touches it</span></label>
+        </fieldset>
+      </form>
+
+      <div class="builder-preview">
+        <h3 class="builder-h3">Live preview</h3>
+        <iframe id="preview-frame" class="preview-frame" title="HeadPain embed preview" src="about:blank"></iframe>
+
+        <h3 class="builder-h3">Paste this into your page</h3>
+        <pre class="snippet"><code id="snippet"></code></pre>
+        <button type="button" class="btn btn--primary btn--sm" id="copy">Copy the snippet</button>
+      </div>
+    </div>
+
+    <section class="builder-api">
+      <h3 class="builder-h3">Driving it from your own page</h3>
+      <p>
+        The embed answers <code>postMessage</code>, so your page's own buttons can steer it: step a
+        reader through a pattern paragraph by paragraph, or turn on x-ray exactly when the text
+        starts talking about depth. Press these to drive the preview above.
+      </p>
+      <div class="api-buttons" id="api-buttons">
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:xray","on":true}'>X-ray on</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:xray","on":false}'>X-ray off</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:isolate","pain":0}'>Show the first pain alone</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:isolate","pain":null}'>Show every pain</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:camera","camera":[2.4,1.4,4.2]}'>Turn to the side</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:reset"}'>Reset the view</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-send='{"type":"headpain:state"}'>Ask what it is showing</button>
+      </div>
+      <pre class="event-log" id="event-log" aria-label="Message log"></pre>
+
+      <details class="api-details">
+        <summary class="link-btn">The whole contract</summary>
+        <h4>URL settings</h4>
+        <table class="api-table">
+          <tr><th>map</th><td>A share-link payload: the part after <code>#m=</code> in a HeadPain link.</td></tr>
+          <tr><th>preset</th><td>A pattern from the library, for example <code>preset=cluster-headache</code>.</td></tr>
+          <tr><th>demo</th><td>A demo map, for example <code>demo=demo-combo</code>.</td></tr>
+          <tr><th>xray</th><td><code>1</code> starts with the skin translucent.</td></tr>
+          <tr><th>isolate</th><td>Show one pain alone, by name or by number starting at 0.</td></tr>
+          <tr><th>legend</th><td><code>compact</code> (default), <code>full</code>, or <code>off</code>.</td></tr>
+          <tr><th>controls</th><td><code>view</code> (default) or <code>none</code>.</td></tr>
+          <tr><th>rotate</th><td><code>auto</code> turns the head until the visitor touches it. Ignored when the visitor's system asks for reduced motion.</td></tr>
+          <tr><th>spin</th><td>Seconds per revolution when rotating. Default 24.</td></tr>
+          <tr><th>camera</th><td><code>theta,phi,distance</code>, for example <code>camera=2.4,1.4,4.2</code>.</td></tr>
+          <tr><th>title</th><td>Caption text, or <code>off</code> to hide the caption bar.</td></tr>
+          <tr><th>bg</th><td>Six-digit hex background, to blend with your page.</td></tr>
+        </table>
+        <h4>Messages you can send</h4>
+        <table class="api-table">
+          <tr><th>headpain:xray</th><td><code>{ on: true }</code></td></tr>
+          <tr><th>headpain:isolate</th><td><code>{ pain: "Migraine" }</code>, a number, or <code>null</code> for all</td></tr>
+          <tr><th>headpain:camera</th><td><code>{ camera: [theta, phi, distance] }</code></td></tr>
+          <tr><th>headpain:reset</th><td>back to the front view</td></tr>
+          <tr><th>headpain:state</th><td>ask it to report what it is showing</td></tr>
+        </table>
+        <h4>Messages it sends back</h4>
+        <p>
+          Every message carries <code>source: "headpain"</code>. Types are <code>ready</code>,
+          <code>state</code>, <code>pain</code> (the visitor picked one), <code>zone</code> (the
+          visitor hovered an area of the head) and <code>error</code>.
+        </p>
+        <h4>What it will not do</h4>
+        <p>
+          An embed never reads the visitor's saved diary. A HeadPain widget on your page can only
+          show what you put in its URL, so it cannot expose a reader's own private maps.
+        </p>
+      </details>
+    </section>
+  </main>
+
+  <footer class="neo-footer" data-footer-mode="minimal">
+    <strong>Not medical advice.</strong> If symptoms are severe or sudden, seek care immediately.
+  </footer>
+
+  <script type="module" src="js/embed-builder.js"></script>
+</body>
+</html>

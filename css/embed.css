@@ -1,0 +1,85 @@
+/* Embed shell. Design tokens and the legend come from css/style.css; this file
+   is only the frame, because an embed lives inside someone else's layout and
+   must fill whatever box the host gives it. */
+
+.embed-body {
+  margin: 0;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg-stage);
+  color: var(--text-primary);
+  font-family: var(--font);
+}
+
+.embed-frame {
+  margin: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.embed-caption {
+  flex-shrink: 0;
+  padding: 9px 14px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.embed-caption:empty { display: none; }
+
+.embed-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.embed-stage .head-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.embed-stage .stage-legend { pointer-events: none; }
+
+.embed-controls {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 10px;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border-subtle);
+}
+.embed-pains { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.embed-pain {
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.embed-pain:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+.embed-mark {
+  margin-left: auto;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.embed-mark:hover { color: var(--accent-bright); }
+
+.embed-error {
+  max-width: 34ch;
+  text-align: center;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+/* Short hosts (a sidebar card) lose the caption bar before the head shrinks. */
+@media (max-height: 320px) {
+  .embed-caption { display: none; }
+  .embed-controls { padding: 4px 8px; }
+}

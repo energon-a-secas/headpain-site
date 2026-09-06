@@ -30,8 +30,15 @@ export function renderEpisodes(el, ctx) {
         ${ep.markers.length} point${ep.markers.length === 1 ? '' : 's'} · updated ${fmtDate(ep.updatedAt)}
       </p>
       <div class="btn-row" style="margin-top:10px">
-        <button type="button" class="btn btn--primary btn--sm" data-act="new">New episode</button>
-        <button type="button" class="btn btn--secondary btn--sm" data-act="share">Copy share link</button>
+        <button type="button" class="btn btn--primary btn--sm" data-act="explain-link">Copy link to show someone</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-act="new">New episode</button>
+      </div>
+      <p class="fine-print" style="margin-top:6px">
+        The first link opens as a read-only page with a legend, for a doctor, a partner or work.
+        The second opens the editor, for another device of your own.
+      </p>
+      <div class="btn-row" style="margin-top:8px">
+        <button type="button" class="btn btn--secondary btn--sm" data-act="share">Copy editable link</button>
       </div>
       <div class="btn-row" style="margin-top:8px">
         <button type="button" class="btn btn--secondary btn--sm" data-act="export-one">Export episode JSON</button>
@@ -41,6 +48,11 @@ export function renderEpisodes(el, ctx) {
         <button type="button" class="btn btn--ghost btn--sm" data-act="import">Import JSON…</button>
         <button type="button" class="btn btn--danger btn--sm" data-act="delete">Delete episode</button>
       </div>
+      <p class="fine-print" style="margin-top:10px">
+        Putting a map in a page of your own?
+        <a class="link-btn" href="embed-builder.html">Build an embed</a>: an iframe with the legend,
+        x-ray, and one pain at a time, driven from your page's own buttons.
+      </p>
     </div>
 
     <div>
@@ -58,6 +70,7 @@ export function renderEpisodes(el, ctx) {
   const act = name => el.querySelector(`[data-act="${name}"]`);
   act('new').addEventListener('click', () => ctx.actions.newEpisode());
   act('share').addEventListener('click', () => ctx.actions.copyShareLink());
+  act('explain-link').addEventListener('click', () => ctx.actions.copyShareLink({ explain: true }));
   act('export-one').addEventListener('click', () => ctx.actions.exportEpisode());
   act('export-all').addEventListener('click', () => ctx.actions.exportAll());
   act('import').addEventListener('click', () => ctx.actions.pickImportFile());

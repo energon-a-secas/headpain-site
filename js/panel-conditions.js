@@ -8,6 +8,7 @@ import {
 import { ROOT_CAUSE_NOTE } from './guidance.js';
 import { escHtml } from './utils.js';
 import { activeEpisode, activeGroup } from './state.js';
+import { patternSvg } from './patterns.js';
 
 function detailBlock(c) {
   return `
@@ -24,25 +25,43 @@ function detailBlock(c) {
 function condActions(c) {
   return `
     <div class="cond-actions btn-row">
-      <button type="button" class="btn btn--primary btn--sm" data-addgroup="${c.id}">
-        + Add as group
+      <button type="button" class="btn btn--primary btn--sm" data-learn="${c.id}">
+        Show me on the head
+      </button>
+      <button type="button" class="btn btn--secondary btn--sm" data-add-pain="${c.id}">
+        + Add as a pain
       </button>
       <button type="button" class="btn btn--secondary btn--sm" data-preset="${c.id}">
-        Replace map with pattern
+        Replace my map
       </button>
     </div>`;
+}
+
+// Wired the same way from the matcher and from the library.
+function wireCondActions(el, ctx) {
+  el.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => ctx.actions.applyPreset(btn.dataset.preset));
+  });
+  el.querySelectorAll('[data-add-pain]').forEach(btn => {
+    btn.addEventListener('click', () => ctx.actions.addPatternAsPain(btn.dataset.addPain));
+  });
+  el.querySelectorAll('[data-learn]').forEach(btn => {
+    btn.addEventListener('click', () => ctx.actions.learn(btn.dataset.learn));
+  });
 }
 
 export function renderMatches(el, ctx) {
   const ep = activeEpisode();
   const group = activeGroup();
   const all = ep?.markers || [];
+  // Scored one pain at a time. Mixing two concurrent pains into one score was
+  // asking which single condition explains both, which is not a real question.
   const markers = group ? all.filter(m => m.groupId === group.id) : all;
 
   let body;
   if (!markers.length) {
     body = `<div class="empty-note">${group
-      ? `No points in the “${escHtml(group.name)}” group yet: tap the head to add some.`
+      ? `No points in “${escHtml(group.name)}” yet: tap the head to add some.`
       : 'Add points on the Map tab to see which published patterns your map resembles.'}</div>`;
   } else {
     const matches = scoreConditions(markers, ctx.registry.zoneById);
@@ -70,16 +89,12 @@ export function renderMatches(el, ctx) {
     <h2 class="section-title">Closest patterns for this map</h2>
     <p class="fine-print">${escHtml(MATCHER_DISCLAIMER)}</p>
     <p class="fine-print" style="margin-top:6px">${escHtml(MATCH_CAP_NOTE)}</p>
-    ${group ? `<p class="fine-print scope-note" style="margin-top:6px">Matching only the
-      <strong>${escHtml(group.name)}</strong> group: click it again on the Map tab to match the whole map.</p>` : ''}
+    ${group ? `<p class="fine-print scope-note" style="margin-top:6px">Scored against
+      ${patternSvg(group.pattern, group.color, 12)} <strong>${escHtml(group.name)}</strong> on its own.
+      Pick another pain above the head to score that one instead.</p>` : ''}
     <div style="margin-top:12px">${body}</div>`;
 
-  el.querySelectorAll('[data-preset]').forEach(btn => {
-    btn.addEventListener('click', () => ctx.actions.applyPreset(btn.dataset.preset));
-  });
-  el.querySelectorAll('[data-addgroup]').forEach(btn => {
-    btn.addEventListener('click', () => ctx.actions.applyPresetAsGroup(btn.dataset.addgroup));
-  });
+  wireCondActions(el, ctx);
 }
 
 export function renderRedFlags(el) {
@@ -99,7 +114,14 @@ export function renderLibrary(el, ctx) {
     ['common', 'Common patterns'],
     ['advanced', 'Advanced & structural']
   ];
-  el.innerHTML = '<h2 class="section-title">Browse the library</h2>' + tiers.map(([tier, title]) => {
+  el.innerHTML = `
+    <h2 class="section-title">Browse the library</h2>
+    <p class="fine-print">
+      ${CONDITIONS.length} published patterns. <strong>Show me on the head</strong> opens one
+      read-only with its explanation, without touching your own maps. Every pattern also has a
+      link of its own: <code>?learn=&lt;pattern&gt;</code>, and an
+      <a class="link-btn" href="embed-builder.html">embed</a> you can put in a page.
+    </p>` + tiers.map(([tier, title]) => {
     const cards = CONDITIONS.filter(c => c.tier === tier).map(c => `
       <div class="library-card">
         <div class="match-head">
@@ -116,10 +138,5 @@ export function renderLibrary(el, ctx) {
     return `<h3 class="section-title" style="margin-top:16px;font-size:0.85rem;color:var(--text-muted)">${title}</h3>${cards}`;
   }).join('');
 
-  el.querySelectorAll('[data-preset]').forEach(btn => {
-    btn.addEventListener('click', () => ctx.actions.applyPreset(btn.dataset.preset));
-  });
-  el.querySelectorAll('[data-addgroup]').forEach(btn => {
-    btn.addEventListener('click', () => ctx.actions.applyPresetAsGroup(btn.dataset.addgroup));
-  });
+  wireCondActions(el, ctx);
 }

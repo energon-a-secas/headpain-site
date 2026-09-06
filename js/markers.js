@@ -2,10 +2,18 @@
 // encodings (ring for muscle, inward column for deep, pulsing core for inside)
 // and a long nail-spike for ice-pick stabs that reads best in x-ray view.
 // The head mesh sits at the origin with identity transform, so head-local == world.
+//
+// Three visual channels, three meanings, no overlap:
+//   identity  → the pain's hue *and* its pattern glyph (patterns.js)
+//   intensity → saturation (paint()) plus decal size and opacity
+//   depth     → the sub-surface geometry: ring, column, nail-spike
+// Quality adds a jagged rim on top of whichever glyph the pain owns, so a
+// stabbing point in the sky pain still reads as the sky pain.
 
 import * as THREE from 'three';
 import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
-import { intensityColor } from './utils.js';
+import { drawPattern } from './patterns.js';
+import { paint, GROUP_COLORS } from './groups.js';
 import { spreadById } from './zones.js';
 
 const MAX_MARKERS = 60;
@@ -18,35 +26,6 @@ function gradientCanvas(draw) {
   const tex = new THREE.CanvasTexture(c);
   tex.anisotropy = 2;
   return tex;
-}
-
-function coreTexture() {
-  return gradientCanvas(ctx => {
-    const g = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
-    g.addColorStop(0, 'rgba(255,255,255,0.98)');
-    g.addColorStop(0.45, 'rgba(255,255,255,0.85)');
-    g.addColorStop(0.75, 'rgba(255,255,255,0.35)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
-  });
-}
-
-function spikyTexture() {
-  return gradientCanvas(ctx => {
-    ctx.translate(128, 128);
-    ctx.beginPath();
-    const spikes = 12;
-    for (let i = 0; i < spikes * 2; i++) {
-      const r = i % 2 === 0 ? 120 : 48;
-      const a = (i / (spikes * 2)) * Math.PI * 2;
-      ctx[i === 0 ? 'moveTo' : 'lineTo'](Math.cos(a) * r, Math.sin(a) * r);
-    }
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.filter = 'blur(6px)';
-    ctx.fill();
-  });
 }
 
 function haloTexture() {
@@ -73,6 +52,7 @@ function ringTexture() {
 }
 
 const SPIKY_QUALITIES = new Set(['electric', 'stabbing', 'ice-pick', 'sharp']);
+const DEFAULT_STYLE = { color: GROUP_COLORS[0], pattern: 'solid' };
 const XRAY_FADE = { halo: 0.2, ring: 0.2, core: 0.5, sel: 0.4 };
 const _zAxis = new THREE.Vector3(0, 0, 1);
 const _q = new THREE.Quaternion();
@@ -83,12 +63,10 @@ export class MarkerLayer {
     this.headMesh = headMesh;
     this.group = new THREE.Group();
     parent.add(this.group);
-    this.tex = {
-      core: coreTexture(),
-      spiky: spikyTexture(),
-      halo: haloTexture(),
-      ring: ringTexture()
-    };
+    this.tex = { halo: haloTexture(), ring: ringTexture() };
+    // Pattern textures are white glyphs tinted per marker, so eight shapes plus
+    // their spiked variants are the whole cache no matter how many pains exist.
+    this.patternTex = new Map();
     this.columnGeom = new THREE.CylinderGeometry(0.045, 0.045, 1, 12, 1, true);
     this.columnGeom.translate(0, -0.5, 0); // origin at skin, extends down -y before orientation
     // Nail-spike for ice-pick: wide at the skin, tip driven deep inside.
@@ -98,6 +76,17 @@ export class MarkerLayer {
     this.items = []; // { root, disposables, pulseMat, phase, dim }
     this.decalMats = []; // { mat, base, role } — faded in x-ray so deep columns read clearly
     this.xray = false;
+  }
+
+  // Lazily built and cached: at most 16 textures for the life of the layer.
+  glyph(patternId, spiky) {
+    const key = `${patternId}${spiky ? '+s' : ''}`;
+    let tex = this.patternTex.get(key);
+    if (!tex) {
+      tex = gradientCanvas(ctx => drawPattern(ctx, patternId, spiky));
+      this.patternTex.set(key, tex);
+    }
+    return tex;
   }
 
   clear() {
@@ -148,14 +137,15 @@ export class MarkerLayer {
     return { mesh, disposables: [mat] };
   }
 
-  sync(markers, selectedId, groupColors = {}, activeGroupId = null) {
+  sync(markers, selectedId, groupStyle = {}, isolateGroupId = null) {
     this.clear();
     const capped = markers.slice(0, MAX_MARKERS);
     for (const marker of capped) {
       const root = new THREE.Group();
       const disposables = [];
-      const color = new THREE.Color(groupColors[marker.groupId] || intensityColor(marker.intensity));
-      const dim = activeGroupId && marker.groupId !== activeGroupId ? DIM_FACTOR : 1;
+      const style = groupStyle[marker.groupId] || DEFAULT_STYLE;
+      const color = new THREE.Color(paint(style.color, marker.intensity));
+      const dim = isolateGroupId && marker.groupId !== isolateGroupId ? DIM_FACTOR : 1;
       const spreadRadius = spreadById(marker.spread).radius;
       const coreSize = Math.max(0.16, spreadRadius * 0.7);
       const haloSize = spreadRadius * 1.6;
@@ -165,8 +155,8 @@ export class MarkerLayer {
       const halo = this.addDecal(marker, this.tex.halo, color, haloSize, (0.3 + marker.intensity * 0.04) * dim, 'halo');
       root.add(halo.mesh); disposables.push(...halo.disposables);
 
-      // core (spiky variant for electric/stabbing qualities)
-      const coreTex = SPIKY_QUALITIES.has(marker.quality) ? this.tex.spiky : this.tex.core;
+      // core: the pain's own glyph, with a jagged rim for stabbing qualities
+      const coreTex = this.glyph(style.pattern, SPIKY_QUALITIES.has(marker.quality));
       const core = this.addDecal(marker, coreTex, color, coreSize, baseOpacity);
       root.add(core.mesh); disposables.push(...core.disposables);
 
@@ -217,5 +207,7 @@ export class MarkerLayer {
     this.columnGeom.dispose();
     this.spikeGeom.dispose();
     Object.values(this.tex).forEach(t => t.dispose());
+    this.patternTex.forEach(t => t.dispose());
+    this.patternTex.clear();
   }
 }

@@ -2,7 +2,8 @@
 
 import { loadRegistry } from './registry.js';
 import { createHead3D } from './head3d.js';
-import { state, loadFromStorage, loadFromUrlPayload } from './state.js';
+import { state } from './state.js';
+import { loadFromStorage, loadFromUrlPayload } from './persist.js';
 import { initApp } from './events.js';
 import { $, base64UrlDecode, safeJsonParse } from './utils.js';
 
@@ -19,8 +20,9 @@ async function boot() {
   if (!restored) loadFromStorage();
 
   const head = createHead3D($('#stage'), registry);
-  initApp({ state, registry, head });
-  window.__headmap = { state, registry, head }; // test/debug handle
+  const ctx = { state, registry, head };
+  initApp(ctx);
+  window.__headmap = ctx; // test/debug handle: also carries els and actions
 }
 
 boot().catch(err => {
