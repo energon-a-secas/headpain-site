@@ -7,6 +7,7 @@
 
 import { escHtml } from './utils.js';
 import { CONDITIONS, CARD_DISCLAIMER } from './conditions.js';
+import { escHtml as esc } from './utils.js';
 import { activeEpisode, isolatedGroup } from './state.js';
 import { buildLegend, legendHtml } from './legend.js';
 import { patternSvg } from './patterns.js';
@@ -52,6 +53,27 @@ function painCard(p) {
     </div>`;
 }
 
+// Offered only when the map on screen came from the library: comparing
+// somebody's own pain against a textbook pattern is what the Patterns tab does,
+// and doing it here would quietly replace their map.
+function comparePicker(model) {
+  const shown = model.pains.map(p => p.conditionId).filter(Boolean);
+  if (!shown.length) return '';
+  const options = CONDITIONS
+    .filter(c => !c.notMappable && c.primary?.length && !shown.includes(c.id))
+    .map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  if (!options) return '';
+  const base = shown[0];
+  return `
+    <div class="explain-compare">
+      <label for="compare-with">${shown.length > 1 ? 'Swap the second pattern for' : 'Compare it with'}</label>
+      <select id="compare-with" data-compare-base="${esc(base)}">
+        <option value="">Choose a pattern…</option>
+        ${options}
+      </select>
+    </div>`;
+}
+
 export function renderExplain(el, stageLegendEl, ctx) {
   const ep = activeEpisode();
   if (!ep) return;
@@ -72,6 +94,7 @@ export function renderExplain(el, stageLegendEl, ctx) {
         across ${model.painCount} pain${model.painCount === 1 ? '' : 's'}</p>
       <p class="explain-note">${escHtml(READING_NOTE)}</p>
       ${impactCardHtml(ep)}
+      ${comparePicker(model)}
       ${model.pains.length > 1 ? `
         <div class="explain-hint">Click a pain above the head to see it on its own.</div>` : ''}
       ${model.pains.map(painCard).join('') || '<div class="empty-note">This map has no points yet.</div>'}
@@ -79,4 +102,9 @@ export function renderExplain(el, stageLegendEl, ctx) {
         This is a description of pain, not a diagnosis. It was written by the person who feels it.
       </p>
     </div>`;
+
+  const picker = el.querySelector('#compare-with');
+  picker?.addEventListener('change', () => {
+    if (picker.value) ctx.actions.compare([picker.dataset.compareBase, picker.value]);
+  });
 }

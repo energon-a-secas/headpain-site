@@ -15,7 +15,7 @@ import {
 import { CONDITIONS, presetMarkers } from './conditions.js';
 import { DEMOS } from './demos.js';
 import { WHOLE_HEAD_SPOT, materializeSpots as spotsFor, shortName,
-  episodeFromCondition, episodeFromDemo } from './presets.js';
+  episodeFromCondition, episodeFromDemo, episodeFromComparison } from './presets.js';
 import { renderAll } from './render.js';
 import { renderZoneBrowser } from './editor.js';
 import { startRename, closeStylePopover } from './painbar.js';
@@ -194,6 +194,18 @@ export function initApp(ctx) {
       head.resize();
       head.setCamera(ep.camera?.theta ?? 0, ep.camera?.phi ?? Math.PI / 2, ep.camera?.dist ?? 4.9);
       toast('Reading a published pattern. Your own maps are untouched.');
+    },
+
+    // Two patterns side by side, which on this model means two pains on one head.
+    compare(ids) {
+      const ep = episodeFromComparison(ids, registry);
+      if (!ep) { toast('Pick two patterns that can both be shown on the head'); return; }
+      loadLearnEpisode(ep);
+      setExplain(true);
+      renderAll(ctx);
+      head.resize();
+      head.setCamera(ep.camera.theta, ep.camera.phi, ep.camera.dist);
+      toast('Press Isolate, or click a pain above the head, to see either one alone');
     },
 
     toggleExplain() {
@@ -442,6 +454,14 @@ export function initApp(ctx) {
   if (learn) {
     const learnEp = episodeFromCondition(learn, registry) || episodeFromDemo(learn, registry);
     if (learnEp) { loadLearnEpisode(learnEp); setExplain(true); }
+  }
+  // ?compare=a,b puts two published patterns on the same head, which is the
+  // question a reader actually has: not "what is a cluster headache" but "how
+  // is that different from my migraine".
+  const compare = (query.get('compare') || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (compare.length >= 2) {
+    const cmpEp = episodeFromComparison(compare, registry);
+    if (cmpEp) { loadLearnEpisode(cmpEp); setExplain(true); }
   }
 
   els.btnXray.setAttribute('aria-pressed', String(state.view === 'xray'));

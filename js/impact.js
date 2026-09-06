@@ -106,7 +106,7 @@ function joinPhrases(list, joiner = 'and') {
   return `${list.slice(0, -1).join(', ')} ${joiner} ${list[list.length - 1]}`;
 }
 
-const phrasesOf = (list, ids) => (ids || []).map(id => byId(list, id)?.phrase).filter(Boolean);
+const phrasesOf = (list, ids) => (Array.isArray(ids) ? ids : []).map(id => byId(list, id)?.phrase).filter(Boolean);
 
 // Sentences, not a filled-in form. This is what the explain view shows and what
 // the exported PNG carries, so it has to survive being read out loud.
@@ -140,7 +140,7 @@ export function impactSentences(impact) {
 // Compact form for share links: two indices, three bitmasks and a day count.
 // ---------------------------------------------------------------------------
 
-const mask = (list, ids) => (ids || []).reduce((bits, id) => {
+const mask = (list, ids) => (Array.isArray(ids) ? ids : []).reduce((bits, id) => {
   const i = list.findIndex(o => o.id === id);
   return i >= 0 ? bits | (1 << i) : bits;
 }, 0);

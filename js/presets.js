@@ -19,7 +19,9 @@ export function materializeSpots(list, registry) {
   for (const m of list || []) {
     const zone = registry.zoneById(m.zoneId);
     if (!zone) continue;
-    const spot = zone.virtual || !zone.anchor ? WHOLE_HEAD_SPOT : { p: [...zone.anchor], n: [...zone.normal] };
+    const spot = zone.virtual || !zone.anchor
+      ? { p: [...WHOLE_HEAD_SPOT.p], n: [...WHOLE_HEAD_SPOT.n] }
+      : { p: [...zone.anchor], n: [...zone.normal] };
     out.push({ ...m, p: spot.p, n: spot.n });
   }
   return out;
@@ -86,6 +88,21 @@ export function episodeFromCondition(id, registry) {
   return plainEpisode(c.name, [{
     name: shortName(c.name), conditionId: c.id, markers: presetMarkers(c)
   }], registry);
+}
+
+// Two published patterns on one head, as two pains. Comparison needs no new
+// scene and no split view: the pain model already draws two things at once and
+// Isolate already shows either alone, so this is the same machinery pointed at
+// the library instead of at someone's own map.
+export function episodeFromComparison(ids, registry) {
+  const picked = ids.map(conditionById).filter(c => c && !c.notMappable && c.primary?.length);
+  if (picked.length < 2) return null;
+  const ep = plainEpisode(
+    picked.map(c => shortName(c.name)).join(' vs '),
+    picked.map(c => ({ name: shortName(c.name), conditionId: c.id, markers: presetMarkers(c) })),
+    registry
+  );
+  return ep.markers.length ? ep : null;
 }
 
 export function episodeFromDemo(id, registry) {

@@ -460,7 +460,9 @@ await it('a share link opens the map the sender built, in the view they chose', 
     // Import inside the iframe's realm. `import()` here would load a SECOND
     // copy of state.js in this page, whose store is empty, and buildShareUrl
     // reads module-level state: the link would come back describing nothing.
-    const ex = await ctx.win.eval("import('./js/export.js')");
+    // Root-absolute: a relative specifier inside eval() resolves against THIS
+    // page's URL (/tests/), not the iframe's.
+    const ex = await ctx.win.eval("import('/js/export.js')");
     url = ex.buildShareUrl(ctx.win.__headmap.registry.zoneIndexOf, { explain: true });
     assert.gt(url.length, 300, 'the payload is too short to hold a two-pain map');
   });
@@ -475,6 +477,94 @@ await it('a share link opens the map the sender built, in the view they chose', 
     assert.equal(ctx.win.__headmap.state.episodes[0].groups.length, 2);
     assert.ok(ctx.doc.querySelector('#stage-legend .legend'), 'no legend for the recipient');
   } finally { ctx.destroy(); restoreDiary(); }
+});
+
+// ── Comparing two patterns ──────────────────────────────────────────────────
+group('compare');
+
+await it('?compare= puts two published patterns on one head as two distinguishable pains', async () => {
+  await withApp('?compare=migraine-no-aura,tension-type', async ctx => {
+    assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
+    const ep = ctx.win.__headmap.state.episodes[0];
+    assert.equal(ep.groups.length, 2);
+    assert.notEqual(ep.groups[0].color, ep.groups[1].color, 'both patterns came out the same hue');
+    assert.notEqual(ep.groups[0].pattern, ep.groups[1].pattern, 'both patterns came out the same glyph');
+    assert.gt(ep.markers.length, 2);
+    assert.ok(ctx.win.__headmap.state.explain, 'a comparison should open read-only');
+    assert.equal(ep.markers.filter(m => !ep.groups.some(g => g.id === m.groupId)).length, 0,
+      'a comparison produced points belonging to no pain');
+    const names = [...ctx.doc.querySelectorAll('.legend-name')].map(n => n.textContent);
+    assert.equal(names.length, 2, `legend rows: ${JSON.stringify(names)}`);
+  });
+});
+
+await it('a comparison can be narrowed to one pattern at a time', async () => {
+  await withApp('?compare=cluster-headache,migraine-no-aura', async ctx => {
+    const s = ctx.win.__headmap.state;
+    const first = s.episodes[0].groups[0];
+    ctx.win.__headmap.actions.isolatePain(first.id);
+    assert.equal(s.isolateGroupId, first.id);
+    assert.equal(ctx.doc.querySelectorAll('.legend-row.faded').length, 1,
+      'isolating one pattern did not fade the other');
+  });
+});
+
+await it('a comparison never touches the reader own diary', async () => {
+  localStorage.setItem('headmap-v2', JSON.stringify({
+    v: 2, episodes: [{ id: 'mine', title: 'Mine', createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z', camera: { theta: 0, phi: 1.57, dist: 4.9 },
+      groups: [], markers: [] }], activeEpisodeId: 'mine', view: 'normal'
+  }));
+  const ctx = await boot(APP + '?compare=migraine-no-aura,tension-type');
+  try {
+    await appReady(ctx);
+    await wait(400);
+    assert.equal(JSON.parse(localStorage.getItem('headmap-v2')).episodes[0].title, 'Mine');
+  } finally { ctx.destroy(); restoreDiary(); }
+});
+
+await it('a bad comparison says so instead of opening an empty head', async () => {
+  await withApp('?compare=not-a-pattern,also-not-real', async ctx => {
+    assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
+    assert.ok(!ctx.win.__headmap.state.explain, 'an unusable comparison still opened the read-only view');
+    assert.equal(ctx.win.__headmap.state.episodes[0].markers.length, 0);
+  });
+});
+
+await it('the explain view offers to compare a library pattern, but never someone own map', async () => {
+  await withApp('?learn=cluster-headache', async ctx => {
+    const picker = ctx.doc.querySelector('#compare-with');
+    assert.ok(picker, 'no compare picker on a library pattern');
+    assert.gt(picker.options.length, 5);
+    assert.ok(![...picker.options].some(o => o.value === 'cluster-headache'),
+      'the picker offered to compare a pattern with itself');
+  });
+  await withApp('', async ctx => {
+    ctx.win.__headmap.actions.addPointForZone('temple-left');
+    ctx.win.__headmap.actions.toggleExplain();
+    assert.ok(!ctx.doc.querySelector('#compare-with'),
+      'the picker appeared on a personal map, where choosing would replace it');
+  });
+});
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+group('navigation');
+
+await it('the three pages can be reached from each other', async () => {
+  const links = async (src, expected) => {
+    const ctx = await boot(src, { width: 1200, height: 800 });
+    try {
+      await until(() => ctx.doc.querySelector('a[href]'), { label: 'the page to render' });
+      const hrefs = [...ctx.doc.querySelectorAll('a[href]')].map(a => a.getAttribute('href'));
+      for (const want of expected) {
+        assert.ok(hrefs.some(h => h && h.startsWith(want)),
+          `${src} has no link to ${want}; hrefs were ${JSON.stringify(hrefs.slice(0, 12))}`);
+      }
+    } finally { ctx.destroy(); }
+  };
+  await links(APP, ['headache-patterns.html', 'embed-builder.html']);
+  await links('../headache-patterns.html', ['./?learn=', './?compare=', 'embed-builder.html']);
+  await links('../embed-builder.html', ['./']);
 });
 
 // ── The patterns page ───────────────────────────────────────────────────────

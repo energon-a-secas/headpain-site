@@ -14,8 +14,8 @@ import { resetShim } from './shim.mjs';
 import { registry } from './fixtures.mjs';
 import {
   URL_MARKER_CAP, shareWouldTruncate, serializeForUrl, episodeFromUrlPayload,
-  loadFromUrlPayload, absorbShared, episodeToJson, allToJson, importJson,
-  saveToStorage, loadFromStorage
+  loadFromUrlPayload, loadLearnEpisode, absorbShared, episodeToJson, allToJson,
+  importJson, saveToStorage, loadFromStorage
 } from '../js/persist.js';
 import {
   state, defaultEpisode, defaultGroup, defaultMarker, STORAGE_KEY, ORPHAN_PAIN_NAME, resetToDefaults
@@ -28,10 +28,12 @@ import { emptyImpact } from '../js/impact.js';
 const zoneIndexOf = registry.zoneIndexOf;
 const zoneIdAt = registry.zoneIdAt;
 
-// A fresh live model, and nothing else. persist.js's own resetToDefaults()
-// throws (see the todo at the bottom of this file), so the shape comes from
-// state.js's own constructors. Deliberately does NOT touch localStorage: the
-// point of half these tests is to reload a diary the previous lines wrote.
+// A fresh live model, and nothing else. Built out of state.js's own
+// constructors rather than by calling resetToDefaults(), which is itself under
+// test at the bottom of this file: a reset that broke would otherwise take
+// every test here down through its setup instead of failing on its own line.
+// Deliberately does NOT touch localStorage: the point of half these tests is to
+// reload a diary the previous lines wrote.
 function resetModel() {
   const ep = defaultEpisode('My first map');
   Object.assign(state, {
@@ -102,13 +104,25 @@ test('a note with a curly apostrophe, an emoji and CJK survives the whole share-
   // The regression: btoa speaks Latin-1 only, so this note used to throw
   // InvalidCharacterError out of the click handler and leave "Copy share link"
   // dead with no toast. iOS types that apostrophe by default.
-  const note = 'It’s a 9/10 \u{1F92F} 頭痛がひどい';
+  const note = 'It’s a 9/10 \u{1F92F}\u{1F92F}\u{1F92F} 頭痛がひどい';
   const ep = richEpisode();
   ep.markers[0].note = note;
   ep.title = 'Mañana: “左側” pain';
   install(ep);
 
-  const encoded = base64UrlEncode(JSON.stringify(serializeForUrl(zoneIndexOf)));
+  const json = JSON.stringify(serializeForUrl(zoneIndexOf));
+  // The url-safe alphabet swap can only be tested by a payload whose plain
+  // base64 actually contains the characters it swaps, and that depends on where
+  // the emoji bytes land. This fixture forces all three; if a change to the
+  // payload format shifts the alignment, THIS line fails rather than the next
+  // one quietly checking nothing. (Three of these emoji, not one, for exactly
+  // that reason.)
+  const plain = Buffer.from(json, 'utf8').toString('base64');
+  for (const ch of ['+', '/', '=']) {
+    assert.ok(plain.includes(ch), `the fixture no longer produces a "${ch}", so the next assertion is vacuous`);
+  }
+
+  const encoded = base64UrlEncode(json);
   assert.match(encoded, /^[A-Za-z0-9_-]+$/,
     'the payload rides in a URL hash; +, / or = would need escaping the app never does');
 
@@ -117,12 +131,20 @@ test('a note with a curly apostrophe, an emoji and CJK survives the whole share-
   assert.equal(back.title, ep.title);
 });
 
-test('base64UrlDecode returns the exact bytes base64UrlEncode was given, at every padding length', () => {
-  // Padding is stripped on the way out and reconstructed on the way in; an
-  // off-by-one there corrupts only some notes, which is the worst kind of bug.
+test('base64UrlEncode writes real base64url, and decoding it returns the exact bytes at every padding length', () => {
+  // Honest about what this can and cannot catch. Padding is stripped on the way
+  // out and reconstructed on the way in, but atob is WHATWG forgiving-base64
+  // and accepts unpadded input, so *deleting* the reconstruction is invisible;
+  // padding that is wrong (`repeat(pad)` instead of `repeat(4 - pad)`) is not,
+  // and that is the off-by-one that corrupts only some notes. Node's own
+  // base64url is the reference for the rest of the alphabet, so a lost +// swap
+  // or a kept = shows up as a difference rather than as a coincidence.
   for (let len = 0; len < 12; len++) {
     const s = 'é’\u{1F92F}'.repeat(1) + 'a'.repeat(len);
+    const reference = Buffer.from(s, 'utf8').toString('base64url');
+    assert.equal(base64UrlEncode(s), reference, `length ${len} did not encode to base64url`);
     assert.equal(base64UrlDecode(base64UrlEncode(s)), s, `length ${len} did not survive`);
+    assert.equal(base64UrlDecode(reference), s, `length ${len}: a link minted by another base64url writer must open`);
   }
 });
 
@@ -131,13 +153,14 @@ test('base64UrlDecode returns the exact bytes base64UrlEncode was given, at ever
 // ---------------------------------------------------------------------------
 
 test('serializeForUrl stops at twelve markers, keeping the first ones in order', () => {
-  // The literal is pinned on purpose: raising the cap lengthens every share
-  // link, and a URL that a chat app or an email client truncates is a map that
-  // silently fails to open. Change it deliberately, not by drift.
-  assert.equal(URL_MARKER_CAP, 12);
-
+  // Twelve is stated once, here, as what the link actually carried: raising the
+  // cap lengthens every share link, and a URL that a chat app or an email
+  // client truncates is a map that silently fails to open. Change it
+  // deliberately, not by drift. (Asserting URL_MARKER_CAP === 12 as well would
+  // only restate the source; the fixture is sized off the constant so the test
+  // stays three points over whatever the cap is.)
   const g = defaultGroup({ name: 'Pain' }, []);
-  const markers = Array.from({ length: 15 }, (_, i) =>
+  const markers = Array.from({ length: URL_MARKER_CAP + 3 }, (_, i) =>
     defaultMarker({ zoneId: 'temple-left', groupId: g.id, note: `p${i}` }));
   install(defaultEpisode('Many', markers, [g]));
 
@@ -146,6 +169,15 @@ test('serializeForUrl stops at twelve markers, keeping the first ones in order',
   assert.deepEqual(payload.m.map(r => r[11]),
     ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11'],
     'the link kept the wrong twelve, or reordered them');
+  assert.equal(shareWouldTruncate(), markers.length - payload.m.length,
+    'the warning and the serializer must count off the same cap, or the number the user is shown is a lie');
+});
+
+test('with no episode open there is nothing to serialize, and serializeForUrl says so rather than throwing', () => {
+  state.episodes = [];
+  state.activeEpisodeId = null;
+  assert.equal(serializeForUrl(zoneIndexOf), null,
+    'the share handler reads .m off this; a throw here leaves the button dead with no toast');
 });
 
 test('shareWouldTruncate names exactly how many points a link would drop', () => {
@@ -232,20 +264,41 @@ test('positions are rounded to three decimals, which is what keeps a link inside
   assert.deepEqual(row.slice(1, 7), [0.123, -0.988, 0.5, 0.111, 0, 0]);
 });
 
-test('an episode-shaped object out of persist.js always carries a camera', () => {
+test('an episode-shaped object out of persist.js always carries a camera you can point at a head', () => {
   // plainEpisode() once omitted it and the boot reported the failure as an
-  // unsupported browser.
-  const fromLink = episodeFromUrlPayload({ v: 2, t: 'No camera', g: [], m: [] }, zoneIdAt);
-  assert.ok(fromLink.camera, 'a payload with no c[] must still get the default camera');
-  assert.equal(typeof fromLink.camera.dist, 'number');
-  assert.equal(typeof fromLink.camera.phi, 'number');
+  // unsupported browser. "Has a camera" is not enough to check: a camera of
+  // NaN, or at distance 0, is a black screen with no error either. So this
+  // asserts a camera the orbit controls can actually start from, for every way
+  // a c[] can arrive broken, which is persist.js's own fallback, not
+  // state.js's default.
+  const usable = (cam, why) => {
+    assert.ok(cam, `${why}: no camera at all`);
+    assert.ok([cam.theta, cam.phi, cam.dist].every(Number.isFinite), `${why}: a NaN camera renders nothing`);
+    assert.ok(cam.dist > 0, `${why}: distance 0 puts the eye inside the head`);
+    assert.ok(cam.phi > 0 && cam.phi < Math.PI, `${why}: phi at a pole degenerates the up vector`);
+  };
+
+  for (const c of [undefined, null, 'nope', 42, [], [null, null, null], ['a', 'b', 'c'], [0, 0, 0]]) {
+    usable(episodeFromUrlPayload({ v: 2, t: 'Bad camera', c, g: [], m: [] }, zoneIdAt).camera,
+      `c: ${JSON.stringify(c) ?? 'undefined'}`);
+  }
+  // A string indexes like an array, so reading c[0..2] off one yields three
+  // characters and an angle nobody ever drew from. Compared against the
+  // no-camera default rather than against literals, so this stays a claim about
+  // behaviour and not a copy of the numbers in state.js.
+  const noCamera = episodeFromUrlPayload({ v: 2, t: 'No c at all', g: [], m: [] }, zoneIdAt).camera;
+  assert.deepEqual(episodeFromUrlPayload({ v: 2, t: 'Camera as text', c: '123', g: [], m: [] }, zoneIdAt).camera,
+    noCamera, 'a string is not a camera');
+
+  // ...and a c[] that is fine is still honoured, so "ignore it always" is not a
+  // way to pass any of this.
+  assert.equal(episodeFromUrlPayload({ v: 2, t: 'Good camera', c: [1.5, 1.1, 3.2], g: [], m: [] }, zoneIdAt).camera.dist, 3.2);
 
   install(richEpisode());
   const json = JSON.parse(JSON.stringify(episodeToJson(state.episodes[0])));
   resetModel();
   importJson(json);
-  assert.ok(state.episodes[0].camera, 'an imported file carries no camera and must be given one');
-  assert.equal(typeof state.episodes[0].camera.theta, 'number');
+  usable(state.episodes[0].camera, 'a JSON file carries no camera at all');
 });
 
 // ---------------------------------------------------------------------------
@@ -255,20 +308,24 @@ test('an episode-shaped object out of persist.js always carries a camera', () =>
 test('a link written before pains carried patterns still gives every pain a distinct pattern', () => {
   // Three-element group tuples: [name, colourIndex, conditionId]. The pattern
   // falls back to the twin of the colour slot so an old link still renders two
-  // pains a greyscale reader can tell apart.
+  // pains a greyscale reader can tell apart. 'Fourth' is the row that matters:
+  // its colour slot (5) and its position (3) disagree, so it is the only row
+  // that can tell the colour-slot pairing apart from "just use the position".
   const back = episodeFromUrlPayload({
     v: 2,
     t: 'Old link',
-    g: [['Migraine', 0, ''], ['Sinus', 1, ''], ['Third', -1, '']],
+    g: [['Migraine', 0, ''], ['Sinus', 1, ''], ['Third', -1, ''], ['Fourth', 5, '']],
     m: []
   }, zoneIdAt);
 
   const patterns = back.groups.map(g => g.pattern);
   assert.ok(patterns.every(isPattern), `old link produced a pattern nothing can draw: ${patterns}`);
-  assert.equal(new Set(patterns).size, 3, 'two pains ended up with the same shape');
+  assert.equal(new Set(patterns).size, 4, 'two pains ended up with the same shape');
   assert.equal(patterns[0], patternAt(0));
   assert.equal(patterns[1], patternAt(1));
   assert.equal(patterns[2], patternAt(2), 'a colour index of -1 falls back to the position in the list');
+  assert.equal(patterns[3], patternAt(5),
+    'a pain keeps the shape twinned with its colour, not the one twinned with where it sits in the list');
 });
 
 test('episodeFromUrlPayload refuses a payload it cannot trust rather than building half an episode', () => {
@@ -290,13 +347,19 @@ test('a truncated marker row is dropped rather than restored with NaN coordinate
     t: 'Half a row',
     g: [['Pain', 0, '', 0]],
     m: [
+      [zoneIndexOf('temple-left'), 0],                                           // truncated to nothing
       [zoneIndexOf('temple-left'), 0, 0, 1],                                     // too short
       [zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'kept', 0]     // whole
     ]
   }, zoneIdAt);
   assert.equal(back.markers.length, 1, 'a short row produced a marker with NaN in its position');
   assert.equal(back.markers[0].note, 'kept');
-  assert.ok(back.markers[0].p.every(Number.isFinite));
+  // Across *every* restored marker, not just the one that was never at risk:
+  // the two-element row is the one whose p would come back [0, NaN, NaN] if a
+  // relaxed filter ever let it through, and a NaN vertex takes the whole 3D
+  // scene down, not just its own point.
+  assert.ok(back.markers.flatMap(m => [...m.p, ...m.n]).every(Number.isFinite),
+    'a restored coordinate is not a number');
 });
 
 test('a restored share link leaves no marker without a pain, even when the payload says group -1', () => {
@@ -332,6 +395,10 @@ test('a restored share link leaves no marker without a pain, even when the paylo
 
 test('a JSON file round-trips an episode including pattern and impact', () => {
   const ep = install(richEpisode());
+  // A fixed date in the past, not the fixture's own timestamp: two fresh
+  // new Date() reads land in the same millisecond, so comparing against one
+  // would hold even if the import stamped today over the file's date.
+  ep.createdAt = '2024-03-01T09:15:00.000Z';
   const file = JSON.parse(JSON.stringify(episodeToJson(ep))); // through disk, as a file really goes
   assert.equal(file.kind, 'headmap-episode');
   assert.equal(file.headmapVersion, 2);
@@ -341,7 +408,8 @@ test('a JSON file round-trips an episode including pattern and impact', () => {
   const back = state.episodes[0];
 
   assert.equal(back.title, 'Bad week');
-  assert.equal(back.createdAt, ep.createdAt, 'when the episode happened is the point of a diary');
+  assert.equal(back.createdAt, '2024-03-01T09:15:00.000Z',
+    'when the episode happened is the point of a diary; re-dating it to today loses the history');
   assert.deepEqual(back.groups.map(g => [g.name, g.color, g.pattern, g.conditionId]),
     [['Migraine', '#38bdf8', 'star', 'migraine'], ['Sinus', '#fbbf24', 'grid', null]]);
   assert.deepEqual(back.impact, ep.impact);
@@ -349,6 +417,42 @@ test('a JSON file round-trips an episode including pattern and impact', () => {
     back.markers.map(m => [m.zoneId, m.intensity, m.depth, m.quality, m.spread, m.note]),
     ep.markers.map(m => [m.zoneId, m.intensity, m.depth, m.quality, m.spread, m.note]));
   assert.deepEqual(back.markers.map(m => m.p), ep.markers.map(m => m.p));
+});
+
+test('a JSON file carries three-decimal coordinates, not the seventeen a float prints', () => {
+  const g = defaultGroup({ name: 'Pain' }, []);
+  const ep = install(defaultEpisode('Precise', [defaultMarker({
+    zoneId: 'temple-left', groupId: g.id,
+    p: [0.1234567890123456, -0.9876543210987654, 0.5], n: [0.1112223334445556, 0, 0]
+  })], [g]));
+
+  const file = episodeToJson(ep);
+  assert.deepEqual(file.markers[0].position, [0.123, -0.988, 0.5],
+    'a whole-diary export is a file someone emails; seventeen digits per axis is noise below the model\'s own precision');
+  assert.deepEqual(file.markers[0].normal, [0.111, 0, 0]);
+});
+
+test('a file naming a depth, quality or spread the app does not have falls back instead of poisoning the model', () => {
+  // A hand-edited file, or one from a future version. depthById() and
+  // spreadById() silently substitute their first entry when they cannot find
+  // an id, so an unknown value renders as something the model does not say it
+  // is, the editor's select shows nothing chosen, and the condition matcher
+  // stops seeing the point at all. Cheaper to refuse it at the door.
+  assert.equal(importJson({
+    kind: 'headmap-episode',
+    headmapVersion: 2,
+    title: 'Edited by hand',
+    groups: [{ id: 'g1', name: 'Pain', color: '#f43f5e', pattern: 'solid', condition: null }],
+    markers: [{
+      zone: 'temple-left', position: [0, 0, 1], normal: [0, 0, 1], intensity: 6, group: 'g1',
+      depth: 'sideways', quality: 'made-up', spread: 'enormous'
+    }]
+  }), 1);
+
+  const m = state.episodes[0].markers[0];
+  assert.equal(m.depth, 'surface', 'an unknown depth must land on the default, not in the model');
+  assert.equal(m.quality, null, 'an unknown quality must read as "not said", not as a quality nothing can label');
+  assert.equal(m.spread, 'small', 'an unknown spread must land on the default, not in the model');
 });
 
 test('imported group ids are remapped, so a marker follows its own pain and not a stranger', () => {
@@ -446,20 +550,68 @@ test('saveToStorage and loadFromStorage round-trip the diary, the active episode
   assert.equal(state.activeGroupId, state.episodes[0].groups[0].id);
 });
 
-test('loadFromStorage returns false for absent, corrupt, wrong-version and empty data', () => {
-  assert.equal(loadFromStorage(), false, 'nothing stored');
+test('loadFromStorage refuses absent, corrupt, wrong-version and empty data without touching the live model', () => {
+  // Returning false is only half of it. "Refused cleanly" and "assigned the
+  // stored rubbish over the live episodes, then threw, and the catch turned
+  // that into a false" are the same boolean and very different mornings, so
+  // every leg checks what is still on screen afterwards.
+  const before = state.episodes[0].id;
+  const refuses = why => {
+    assert.equal(loadFromStorage(), false, why);
+    assert.equal(state.episodes.length, 1, `${why}: the live diary was replaced by a payload that was then rejected`);
+    assert.equal(state.episodes[0].id, before, `${why}: what was on screen is gone`);
+  };
+
+  refuses('nothing stored');
 
   localStorage.setItem(STORAGE_KEY, '{ not json at all');
-  assert.equal(loadFromStorage(), false, 'corrupt JSON must not throw out of the boot');
+  refuses('corrupt JSON must not throw out of the boot');
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 1, episodes: [{ id: 'a', title: 't', groups: [], markers: [] }] }));
-  assert.equal(loadFromStorage(), false, 'a v1 diary is not readable as v2');
+  refuses('a v1 diary is not readable as v2');
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 2, episodes: [] }));
-  assert.equal(loadFromStorage(), false, 'an empty episode list is nothing to restore');
+  refuses('an empty episode list is nothing to restore');
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: 2, episodes: 'nope' }));
-  assert.equal(loadFromStorage(), false);
+  refuses('an episodes field that is not a list');
+});
+
+test('a stored diary with a view the app does not have opens in the normal view, with nothing selected', () => {
+  install(richEpisode());
+  state.view = 'xray';
+  saveToStorage();
+  const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  stored.view = 'x-ray, please';
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+
+  resetModel();
+  state.view = 'xray';
+  state.selectedMarkerId = 'm-from-the-session-before';
+  assert.equal(loadFromStorage(), true);
+  assert.equal(state.view, 'normal',
+    'the view is a two-way switch the UI paints from; a third value leaves the toggle disagreeing with the scene');
+  assert.equal(state.selectedMarkerId, null,
+    'a selection from before the reload names a marker that is not on screen, so the editor opens on nothing');
+});
+
+test('a full or blocked localStorage costs the session its save, not the session', () => {
+  install(richEpisode());
+  saveToStorage();
+  const snapshot = localStorage.getItem(STORAGE_KEY);
+
+  const realSetItem = localStorage.setItem;
+  localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+  try {
+    state.episodes[0].title = 'An edit that cannot be stored';
+    assert.doesNotThrow(saveToStorage,
+      'every edit calls this; a quota error escaping here takes out the handler that made the edit');
+  } finally {
+    localStorage.setItem = realSetItem;
+  }
+
+  assert.equal(localStorage.getItem(STORAGE_KEY), snapshot,
+    'the last diary that did fit must still be there to reload');
 });
 
 test('loadFromStorage falls back to the first episode when the stored active id is gone', () => {
@@ -521,25 +673,90 @@ test('absorbShared puts the stored diary back underneath the shared map, then sa
   assert.deepEqual(stored.episodes.map(e => e.title), ['Their map', 'My diary']);
 });
 
-test('absorbShared does nothing when no shared map is open, and never duplicates an episode', () => {
-  const mine = install(defaultEpisode('My diary', [], []));
-  saveToStorage();
+test('absorbShared does not read storage at all when no shared map is open', () => {
+  // The stored diary here is deliberately NOT the one on screen: with the same
+  // episode in both places the id dedupe hides a missing guard, and the test
+  // can then only fail if the dedupe itself breaks. A second, unrelated
+  // episode appearing means storage was read on a normal edit, which would
+  // resurrect episodes the user deleted in this very session.
+  const mine = install(defaultEpisode('On screen', [], []));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    v: 2,
+    activeEpisodeId: 'ep-stored',
+    episodes: [{ id: 'ep-stored', title: 'Deleted earlier today', groups: [], markers: [] }]
+  }));
 
   absorbShared();
-  assert.deepEqual(state.episodes.map(e => e.id), [mine.id],
-    'absorbShared re-read storage while not shared and duplicated the episode already on screen');
+  assert.deepEqual(state.episodes.map(e => e.title), ['On screen'],
+    'absorbShared re-read storage while not shared and merged a diary nobody asked for');
+  assert.deepEqual(state.episodes.map(e => e.id), [mine.id]);
 });
 
-test('absorbShared survives a corrupt stored diary rather than losing the shared map', () => {
-  loadFromUrlPayload({
-    v: 2, t: 'Their map', c: [0, 1.2, 4], i: null, g: [['Theirs', 0, '', 1]],
-    m: [[zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'hi', 0]]
-  }, zoneIdAt);
-  localStorage.setItem(STORAGE_KEY, '{{{ not json');
+test('absorbShared keeps the shared map when the stored diary is unreadable', () => {
+  // The corrupt-JSON leg is a *double* canary and cannot be made sharper:
+  // safeJsonParse and the try/catch around it each swallow the throw on their
+  // own, so only losing both turns it red. The v1 leg is the discriminating
+  // one: drop the version check and an unmigrated v1 diary gets merged in
+  // underneath the shared map.
+  const unreadable = [
+    ['{{{ not json', 'corrupt JSON'],
+    [JSON.stringify({ v: 1, episodes: [{ id: 'ep-v1', title: 'A v1 diary', groups: [], markers: [] }] }), 'a v1 diary'],
+    [JSON.stringify({ v: 2, episodes: 'nope' }), 'an episodes field that is not a list']
+  ];
 
-  absorbShared();
-  assert.equal(state.shared, false);
-  assert.deepEqual(state.episodes.map(e => e.title), ['Their map']);
+  for (const [stored, why] of unreadable) {
+    freshState();
+    loadFromUrlPayload({
+      v: 2, t: 'Their map', c: [0, 1.2, 4], i: null, g: [['Theirs', 0, '', 1]],
+      m: [[zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'hi', 0]]
+    }, zoneIdAt);
+    localStorage.setItem(STORAGE_KEY, stored);
+
+    absorbShared();
+    assert.equal(state.shared, false, `${why}: saving must resume even when there was no diary to restore`);
+    assert.deepEqual(state.episodes.map(e => e.title), ['Their map'],
+      `${why}: the shared map on screen was lost, or half a diary was merged into it`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Library patterns: the other read-only map
+// ---------------------------------------------------------------------------
+
+test('a pattern opened from the library is read-only too, so reading about cluster headache cannot eat the diary', () => {
+  const mine = install(defaultEpisode('My diary', [], []));
+  saveToStorage();
+  const snapshot = localStorage.getItem(STORAGE_KEY);
+  state.selectedMarkerId = 'm-from-my-own-map';
+
+  const g = defaultGroup({ name: 'Cluster' }, []);
+  const lesson = defaultEpisode('Cluster headache', [
+    defaultMarker({ zoneId: 'behind-eye-left', groupId: g.id, intensity: 9 })
+  ], [g]);
+
+  assert.equal(loadLearnEpisode(lesson), true);
+  assert.equal(state.shared, true,
+    'a library pattern is somebody else\'s map; saving it over the diary loses every episode underneath it');
+  assert.deepEqual(state.episodes.map(e => e.title), ['Cluster headache']);
+  assert.equal(state.selectedMarkerId, null, 'a map opened for reading opens with nothing selected');
+  assert.equal(state.activeGroupId, g.id, 'a point added on top of a pattern must land in a pain that exists');
+
+  saveToStorage();
+  assert.equal(localStorage.getItem(STORAGE_KEY), snapshot,
+    'the library pattern was written over the diary');
+
+  resetModel();
+  assert.equal(loadFromStorage(), true);
+  assert.equal(state.episodes[0].id, mine.id, 'the diary did not survive a trip to the pattern library');
+});
+
+test('loadLearnEpisode refuses an episode that is not there rather than blanking the screen', () => {
+  const mine = install(defaultEpisode('My diary', [], []));
+  for (const nothing of [null, undefined]) {
+    assert.equal(loadLearnEpisode(nothing), false);
+  }
+  assert.deepEqual(state.episodes.map(e => e.id), [mine.id], 'a missing pattern emptied the workspace');
+  assert.equal(state.shared, false, 'nothing was opened, so saving must not be blocked from here on');
 });
 
 // ---------------------------------------------------------------------------
@@ -642,19 +859,30 @@ test('a stored group with no id or no name is discarded and its points re-adopte
 });
 
 // ---------------------------------------------------------------------------
-// Known defect
+// Fixed defect, kept pinned
 // ---------------------------------------------------------------------------
 
-// PRODUCT BUG (js/persist.js:271). resetToDefaults() calls defaultState(), which
-// is a module-private function in state.js: it is neither exported there nor
-// imported here, so every call throws
+// resetToDefaults() used to live in persist.js and call defaultState(), which
+// is module-private to state.js: on the wrong side of the seam every call threw
 //   ReferenceError: defaultState is not defined
-// Nothing in js/ calls it today, so the app does not crash, but the export is a
-// loaded gun for the next caller, and tests/fixtures.mjs already reaches for a
-// `resetToDefaults` on state.js that does not exist at all. Left failing rather
-// than fixed, because this file may not edit js/.
-test('resetToDefaults puts the model back to one empty episode', () => {
+// It now lives in state.js beside the function it needs. This pins the whole
+// reset, not just the fact that it returns without throwing: a reset that
+// leaves the previous diary, the shared flag, or a selection behind is the same
+// silent failure by another route.
+test('resetToDefaults puts the model back to one empty episode with nothing left over', () => {
+  install(richEpisode());
+  state.shared = true;
+  state.selectedMarkerId = 'm-stale';
+  state.isolateGroupId = 'g-stale';
+  state.view = 'xray';
+
   resetToDefaults();
-  assert.equal(state.episodes.length, 1);
-  assert.equal(state.shared, false);
+
+  assert.equal(state.episodes.length, 1, 'the old diary is still there');
+  assert.equal(state.episodes[0].markers.length, 0, 'the fresh episode came back with somebody\'s points in it');
+  assert.equal(state.activeEpisodeId, state.episodes[0].id);
+  assert.equal(state.shared, false, 'a reset that stays "shared" can never save again');
+  assert.equal(state.selectedMarkerId, null);
+  assert.equal(state.isolateGroupId, null);
+  assert.equal(state.view, 'normal');
 });

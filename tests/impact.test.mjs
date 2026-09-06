@@ -41,19 +41,46 @@ test('every option carries both a label and a phrase, so no sentence can say "un
 test('phrases are mid-sentence fragments, so none of them starts with a capital or ends in a full stop', () => {
   for (const [name, list] of Object.entries(LISTS)) {
     for (const o of list) {
-      assert.equal(o.phrase[0], o.phrase[0].toLowerCase(),
-        `${name}/${o.id} phrase is capitalised; it is spliced into the middle of a sentence`);
+      assert.match(o.phrase, /^[a-z]/,
+        `${name}/${o.id} phrase does not open with a lowercase letter; it is spliced into the middle of a sentence`);
       assert.ok(!o.phrase.endsWith('.'), `${name}/${o.id} phrase ends a sentence the builder also ends`);
     }
   }
 });
 
-test('every checkbox group in IMPACT_FIELDS names a real array field on an impact', () => {
+// A share link carries indices and bitmask bits, never ids: position N in these
+// arrays IS the wire format. Pinned once, here, as literals. Reordering a list
+// or inserting an option anywhere but the end then fails on the line that says
+// why, instead of silently rewriting every link ever sent.
+test('the option id order is the wire format, so no list may be reordered or inserted into', () => {
+  assert.deepEqual(FREQUENCIES.map(o => o.id),
+    ['rare', 'monthly', 'few-monthly', 'weekly', 'most-days', 'daily', 'constant']);
+  assert.deepEqual(DURATIONS.map(o => o.id),
+    ['seconds', 'under-1h', 'few-hours', 'most-of-day', 'days', 'ongoing']);
+  assert.deepEqual(BLOCKED.map(o => o.id),
+    ['work', 'screens', 'drive', 'sleep', 'care', 'social', 'exercise', 'chores', 'lie-down']);
+  assert.deepEqual(SYMPTOMS.map(o => o.id),
+    ['nausea', 'vomiting', 'light', 'sound', 'smell', 'aura', 'tearing', 'congestion', 'dizzy', 'neck']);
+  assert.deepEqual(RELIEF.map(o => o.id),
+    ['dark', 'quiet', 'sleep', 'cold', 'heat', 'caffeine', 'air', 'massage', 'still']);
+});
+
+test('every checkbox group in IMPACT_FIELDS carries its own question and its own option list', () => {
+  // The pairing, not membership in the set of exported lists: a group wired to
+  // the wrong list renders symptom checkboxes under "What does it stop you
+  // doing?", and normalizeImpact then discards every tick made there, because
+  // it filters blocked against BLOCKED.
+  const OPTIONS_FOR = { blocked: BLOCKED, symptoms: SYMPTOMS, relief: RELIEF };
+  const TITLE_FOR = {
+    blocked: 'What does it stop you doing?',
+    symptoms: 'What comes with it?',
+    relief: 'What helps?'
+  };
   const empty = emptyImpact();
   for (const field of IMPACT_FIELDS) {
     assert.ok(Array.isArray(empty[field.key]), `IMPACT_FIELDS key "${field.key}" is not an array field of an impact`);
-    assert.ok(field.title.length > 4, `${field.key} has no question to show above the checkboxes`);
-    assert.ok(Object.values(LISTS).includes(field.options), `${field.key} points at an option list nothing else exports`);
+    assert.equal(field.options, OPTIONS_FOR[field.key], `${field.key} renders the wrong option list`);
+    assert.equal(field.title, TITLE_FOR[field.key], `${field.key} asks the wrong question above its checkboxes`);
   }
   assert.deepEqual(IMPACT_FIELDS.map(f => f.key), ['blocked', 'symptoms', 'relief']);
 });
@@ -121,6 +148,30 @@ test('normalizeImpact does not let an id from one list leak into another', () =>
   assert.deepEqual(got.relief, [], 'a symptom id was accepted as relief');
 });
 
+test('the one id two lists share, "sleep", stays in the list it was ticked in', () => {
+  // BLOCKED and RELIEF both define 'sleep' (it stops me sleeping / sleep helps)
+  // and that collision is deliberate. The cross-leak test above picks ids that
+  // do not collide, so it cannot see a list cross-wired to a colliding id;
+  // this one can, because 'sleep' sits at a different index in each list.
+  const shared = BLOCKED.map(o => o.id).filter(id => RELIEF.some(o => o.id === id));
+  assert.deepEqual(shared, ['sleep'], 'a newly duplicated id needs a decision, not a silent collision');
+  assert.ok(!SYMPTOMS.some(o => o.id === 'sleep'), 'sleep is not a symptom');
+
+  const got = normalizeImpact({ blocked: ['sleep'], symptoms: ['sleep'], relief: ['sleep'] });
+  assert.deepEqual(got.blocked, ['sleep']);
+  assert.deepEqual(got.symptoms, [], 'the shared id is not a symptom and must not be kept as one');
+  assert.deepEqual(got.relief, ['sleep']);
+
+  // BLOCKED index 3 against RELIEF index 2: a cross-wired mask decodes to a
+  // different word rather than to nothing, which is the failure that reads as
+  // plausible output.
+  const packed = packImpact(normalizeImpact({ blocked: ['sleep'] }));
+  assert.deepEqual(packed, [-1, -1, 8, 0, 0, 0], 'sleep is bit 3 of the blocked mask and nothing else');
+  const decoded = unpackImpact(packed);
+  assert.deepEqual(decoded.blocked, ['sleep']);
+  assert.deepEqual(decoded.relief, [], 'the blocked mask leaked into relief');
+});
+
 test('normalizeImpact returns an empty impact for null, undefined and non-objects', () => {
   for (const junk of [null, undefined, 'nonsense', 42, true, NaN]) {
     assert.deepEqual(normalizeImpact(junk), emptyImpact(), `normalizeImpact(${String(junk)}) was not empty`);
@@ -163,12 +214,12 @@ test('normalizeImpact reads daysLost from a form control string but refuses text
   }
 });
 
-// A hole in the daysLost contract, left failing on purpose: every other reject
-// path yields null, but a value in (0, 0.5) yields 0, so the field is neither
-// null nor an integer in 1..31. Harmless today (0 is falsy, so hasImpact stays
-// false and no sentence is emitted), but it is the one input that can put a
-// non-null, non-answer into a stored episode. Fixing it is a one-word change in
-// js/impact.js, which this task may not touch.
+// The hole this test opened, since closed in js/impact.js: normalizeImpact
+// decided before it rounded, so every other reject path yielded null but a
+// value in (0, 0.5) yielded 0, and the field was neither null nor an integer in
+// 1..31. Harmless in the app (0 is falsy, so hasImpact stayed false and no
+// sentence was emitted) but it was the one input that could put a non-null,
+// non-answer into a stored episode. Kept as the regression pin.
 test('normalizeImpact rounds daysLost before deciding, so a fractional day is not stored as 0', () => {
   // Every reject path yields null. Before the fix, a value in (0, 0.5) yielded
   // 0, so the field was neither null nor an integer in 1..31.
@@ -235,7 +286,7 @@ test('one lost day is a day, not "1 days"', () => {
   assert.deepEqual(
     impactSentences(normalizeImpact({ daysLost: 40 })),
     ['In the last month it cost me about 31 days.'],
-    'the sentence must report the clamped figure, not the one that was typed'
+    'normalizeImpact clamps before the builder sees the number, so the sentence reports 31'
   );
 });
 
@@ -287,6 +338,16 @@ test('an impact that was never normalized still cannot print "undefined" into th
     'In the last month it cost me about 2 days.',
     'What helps: quiet.'
   ], 'unknown ids must drop out of the list without leaving an empty slot in the joiner');
+
+  // The builder does no clamping and no coercion of its own: normalizeImpact is
+  // the only thing that clamps, and legend.js hands the builder whatever the
+  // episode holds. Both lines below are characterisation, not a requirement.
+  assert.deepEqual(impactSentences({ daysLost: 40 }),
+    ['In the last month it cost me about 40 days.'],
+    'the clamp lives in normalizeImpact; moving it here would hide an unclamped stored value');
+  assert.deepEqual(impactSentences({ daysLost: '1' }),
+    ['In the last month it cost me about 1 days.'],
+    'the plural guard is a strict === 1, so a string that skipped normalizeImpact pluralises wrongly');
 });
 
 // ---------------------------------------------------------------------------
@@ -302,16 +363,22 @@ test('packImpact returns null when there is nothing to pack, so an empty share l
 
 test('the packed form is six numbers, with -1 for an unanswered frequency or duration', () => {
   const packed = packImpact(normalizeImpact({ duration: 'days' }));
-  assert.equal(packed.length, 6, 'the tuple width is part of the share-link format');
-  assert.ok(packed.every(n => typeof n === 'number' && Number.isFinite(n)),
-    'a non-number would survive JSON but decode as garbage');
+  // One strict deepEqual covers width, slot types and the index: a dropped
+  // slot, a null where a 0 belongs, or a reordered DURATIONS all land here.
   assert.deepEqual(packed, [-1, 4, 0, 0, 0, 0],
     'the option index IS the wire format: reordering DURATIONS silently rewrites every share link ever sent');
 });
 
-test('an empty impact decodes back to an empty impact, from null or from a tuple of zeros', () => {
-  assert.deepEqual(unpackImpact(packImpact(emptyImpact())), emptyImpact());
-  assert.deepEqual(unpackImpact([-1, -1, 0, 0, 0, 0]), emptyImpact());
+test('a null payload and an all-minus-one tuple decode to empty, but a tuple of zeros does not', () => {
+  // packImpact(emptyImpact()) is null, so the first line is the null path.
+  assert.equal(packImpact(emptyImpact()), null);
+  assert.deepEqual(unpackImpact(null), emptyImpact());
+  assert.deepEqual(unpackImpact([-1, -1, 0, 0, 0, 0]), emptyImpact(), 'the "no answer" tuple');
+  // A genuine tuple of zeros is not empty: 0 is a valid index into both lists,
+  // which is what pins their first entry.
+  assert.deepEqual(unpackImpact([0, 0, 0, 0, 0, 0]),
+    { ...emptyImpact(), frequency: 'rare', duration: 'seconds' },
+    'index 0 of FREQUENCIES and of DURATIONS, decoded');
 });
 
 test('a single field round-trips through pack/unpack unchanged', () => {
@@ -331,23 +398,26 @@ test('a single field round-trips through pack/unpack unchanged', () => {
 });
 
 test('an impact with every option ticked round-trips, so no bitmask bit falls off the end', () => {
+  // Widths as literals, because a mask recomputed from the list it encodes
+  // moves with it: deleting an option shifts every later bit (a share-link
+  // break) and shortens a checkbox group (a content loss), and both would pass.
+  assert.deepEqual(
+    [FREQUENCIES.length, DURATIONS.length, BLOCKED.length, SYMPTOMS.length, RELIEF.length],
+    [7, 6, 9, 10, 9],
+    'an option was added or removed; the tuple below is the wire format that changed with it'
+  );
   const impact = normalizeImpact({
-    frequency: FREQUENCIES[FREQUENCIES.length - 1].id,
-    duration: DURATIONS[DURATIONS.length - 1].id,
+    frequency: 'constant',
+    duration: 'ongoing',
     blocked: BLOCKED.map(o => o.id),
     symptoms: SYMPTOMS.map(o => o.id),
     relief: RELIEF.map(o => o.id),
     daysLost: 31
   });
-  const packed = packImpact(impact);
-  assert.equal(packed[0], FREQUENCIES.length - 1);
-  assert.equal(packed[1], DURATIONS.length - 1);
-  assert.equal(packed[2], (1 << BLOCKED.length) - 1, 'the blocked mask is missing a bit (off-by-one in the shift)');
-  assert.equal(packed[3], (1 << SYMPTOMS.length) - 1, 'the symptom mask is missing a bit');
-  assert.equal(packed[4], (1 << RELIEF.length) - 1, 'the relief mask is missing a bit');
-  assert.equal(packed[5], 31);
-  assert.deepEqual(unpackImpact(packed), impact);
-  assert.equal(unpackImpact(packed).blocked.length, BLOCKED.length);
+  assert.equal(impact.blocked.length, 9, 'a ticked activity was dropped on the way in');
+  assert.deepEqual(packImpact(impact), [6, 5, 511, 1023, 511, 31],
+    'the last index of each list, then every bit of each mask, then the day cap');
+  assert.deepEqual(unpackImpact(packImpact(impact)), impact);
 });
 
 test('unpacking sorts selections into option order, so a share link does not depend on click order', () => {
@@ -379,9 +449,47 @@ test('a hostile share link cannot inject an unknown id or an impossible day coun
   assert.equal(got.frequency, null, 'an out-of-range index must decode to no answer');
   assert.equal(got.duration, null);
   assert.equal(got.daysLost, 31, 'a decoded day count goes through the same clamp as a typed one');
-  const known = new Set([...BLOCKED, ...SYMPTOMS, ...RELIEF].map(o => o.id));
-  for (const id of [...got.blocked, ...got.symptoms, ...got.relief]) {
-    assert.ok(known.has(id), `decoded an id no option list defines: ${id}`);
+  // Per list, never against the union of all three: an id decoded from the
+  // wrong list is a real break (a cross-wired unmask) and a union check cannot
+  // see it. The decoded arrays are asserted outright as well, so a list that
+  // decoded empty cannot leave its loop asserting nothing.
+  assert.deepEqual(got.blocked, ['work', 'screens', 'drive', 'sleep', 'care', 'chores'],
+    'the low nine bits of 99999, read in BLOCKED order');
+  assert.equal(got.symptoms.length, 10, 'an all-bits mask decodes to every symptom, not to extras');
+  assert.deepEqual(got.symptoms, SYMPTOMS.map(o => o.id));
+  assert.deepEqual(got.relief, ['dark'], 'a fractional mask truncates to its integer bits');
+  for (const [name, list, ids] of [
+    ['BLOCKED', BLOCKED, got.blocked], ['SYMPTOMS', SYMPTOMS, got.symptoms], ['RELIEF', RELIEF, got.relief]
+  ]) {
+    assert.ok(ids.length > 0, `${name} decoded to nothing, so the check below asserts nothing`);
+    for (const id of ids) {
+      assert.ok(list.some(o => o.id === id), `${name} decoded an id it does not define: ${id}`);
+    }
   }
-  assert.equal(got.symptoms.length, SYMPTOMS.length, 'an all-bits mask decodes to every symptom, not to extras');
+});
+
+// ---------------------------------------------------------------------------
+// One gap, pinned rather than fixed
+// ---------------------------------------------------------------------------
+
+// A wrongly-typed list kills both public entry points outright:
+//
+//   impactSentences({ blocked: 'work' })  -> TypeError: (ids || []).map is not a function
+//   packImpact({ blocked: 'work' })       -> TypeError: (ids || []).reduce is not a function
+//
+// hasImpact returns true on the string's own .length, and phrasesOf / mask then
+// call .map / .reduce on it. normalizeImpact guards this exact case with
+// Array.isArray (tested above) and every writer in js/ goes through it:
+// state.js:300 on each patch, persist.js:189 on load, persist.js:229 on import.
+// Nothing in the app can reach the throw today, so this is a robustness gap and
+// not a live bug. It is worth pinning because the two callers that would hit it
+// have no fallback: legend.js:104 builds the PNG legend and persist.js:46
+// builds the share link, and a throw there loses the export instead of
+// degrading it. Left as todo per the no-product-edits rule; the fix is one
+// Array.isArray in js/impact.js.
+test('a wrongly-typed list degrades to no selections instead of killing the PNG and the share link', () => {
+  const raw = { ...emptyImpact(), blocked: 'work', daysLost: 2 };
+  assert.deepEqual(impactSentences(raw), ['In the last month it cost me about 2 days.'],
+    'the typed field is lost, the rest of the sentence survives');
+  assert.deepEqual(packImpact(raw), [-1, -1, 0, 0, 0, 2]);
 });

@@ -65,6 +65,29 @@ It refuses to start on a dirty `js/` tree, restores in a `finally`, and verifies
 gap, not a pass. A **skipped** mutant means its anchor text no longer matches the
 source: update `tests/mutants.mjs` rather than ignoring it.
 
+## Why the tests are worded the way they are
+
+The suite was written, then adversarially audited: every test was checked by
+asking "if I broke the source in the way this test claims to protect against,
+would it go red?", and where the answer was unclear, by actually making that
+break and re-running. The audit found 73 tests that could not fail. The usual
+shapes were:
+
+- an assertion that restates a literal from the source rather than testing
+  behaviour
+- a loop whose expectation is computed the same way the source computes it
+  (`GROUP_COLOR_NAMES[i]` checked against `colorName(GROUP_COLORS[i])` passes
+  even after the names are shuffled)
+- a membership check where the real behaviour is an ordering
+  (`GROUP_COLORS.includes(c)` passes even if every overflow pain comes out the
+  same colour)
+- a name that promises more than the body checks
+
+That is why assertions here tend to name expected values outright instead of
+deriving them, and why several tests assert a *sequence* rather than
+set membership. If a change makes one of them feel over-specified, check
+`tests/mutants.mjs` first: the strictness is usually load-bearing.
+
 ## Writing a new test
 
 Read `tests/patterns.test.mjs`. It is the exemplar. The rules the suite is held to:

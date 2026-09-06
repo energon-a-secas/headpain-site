@@ -34,7 +34,15 @@ export function base64UrlEncode(str) {
 export function base64UrlDecode(str) {
   const pad = str.length % 4;
   if (pad) str += '='.repeat(4 - pad);
-  const binary = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  // A link that lost characters on the way here is ordinary, not exceptional:
+  // chat clients wrap long URLs. Returning null lets the caller fall back to the
+  // local diary instead of taking the whole app down with the link.
+  let binary;
+  try {
+    binary = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+  } catch {
+    return null;
+  }
   const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);

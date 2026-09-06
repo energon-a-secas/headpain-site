@@ -7,12 +7,15 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readSource, marker } from './fixtures.mjs';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { ROOT, readSource, marker } from './fixtures.mjs';
 import {
   GROUP_COLORS, GROUP_COLOR_NAMES,
   nextGroupColor, nextGroupPattern, cycleColor, colorIndexOf, colorName,
   hexToRgb, groupById, paint, paintRgb, markerColor, markerPattern,
-  patternAt, isPattern, patternLabel
+  patternAt, isPattern, patternLabel,
+  PATTERNS as REEXPORTED_PATTERNS, patternIndexOf
 } from '../js/groups.js';
 import { PATTERNS } from '../js/patterns.js';
 import { defaultEpisode, defaultGroup, defaultMarker } from '../js/state.js';
@@ -40,6 +43,15 @@ function toHsl([r, g, b]) {
 
 const hueOf = rgb => toHsl(rgb)[0];
 const satOf = rgb => toHsl(rgb)[1];
+
+// Read channels back out of what paint()/markerColor() actually returned, so an
+// assertion about hue sits downstream of the function under test rather than
+// beside it.
+function rgbOf(css) {
+  const m = String(css).match(/^rgb\((\d+), (\d+), (\d+)\)$/);
+  assert.ok(m, `expected an rgb() string the DOM can use, got ${css}`);
+  return m.slice(1).map(Number);
+}
 
 // An episode-shaped object built by the real state.js factories, so groupById
 // walks the same structure the app stores.
@@ -82,12 +94,20 @@ test('saturation rises at every single step of intensity, so 2/10 reads washed o
   }
 });
 
-test('intensity 0 keeps roughly a third of the saturation, so a faint point is still tinted and not grey', () => {
+test('intensity 0 stays visibly tinted and visibly weaker, so a faint point is neither grey nor mistakable for a strong one', () => {
   for (const hex of GROUP_COLORS) {
     const ratio = satOf(paintRgb(hex, 0)) / satOf(paintRgb(hex, 10));
-    assert.ok(Math.abs(ratio - 0.30) < 0.02,
-      `${hex}: MIN_SAT moved, intensity 0 now sits at ${ratio.toFixed(3)} of full saturation`);
+    assert.ok(ratio > 0.15,
+      `${hex}: intensity 0 keeps only ${ratio.toFixed(3)} of full saturation, close enough to grey that the pain loses its hue identity`);
+    assert.ok(ratio < 0.6,
+      `${hex}: intensity 0 keeps ${ratio.toFixed(3)} of full saturation, so the faint end no longer reads as faint`);
   }
+});
+
+test('MIN_SAT is pinned at 0.30: a deliberate retune should have to change this one test and nothing else', () => {
+  const ratio = satOf(paintRgb(SKY, 0)) / satOf(paintRgb(SKY, 10));
+  assert.ok(Math.abs(ratio - 0.30) < 0.02,
+    `the intensity-0 saturation multiplier now reads ${ratio.toFixed(3)}; if that was intentional, move this pin`);
 });
 
 test('intensity 10 paints the palette colour itself, unmodified', () => {
@@ -99,13 +119,11 @@ test('intensity 10 paints the palette colour itself, unmodified', () => {
 
 test('paint returns an rgb() string of three integer channels the DOM can use', () => {
   const css = paint(SKY, 5);
-  const m = css.match(/^rgb\((\d+), (\d+), (\d+)\)$/);
-  assert.ok(m, `paint returned ${css}, which is not an rgb() string`);
-  for (const part of m.slice(1)) {
-    const n = Number(part);
-    assert.ok(Number.isInteger(n) && n >= 0 && n <= 255, `channel ${part} out of range`);
+  const channels = rgbOf(css);
+  for (const n of channels) {
+    assert.ok(Number.isInteger(n) && n >= 0 && n <= 255, `channel ${n} out of range`);
   }
-  assert.deepEqual(paintRgb(SKY, 5), m.slice(1).map(Number), 'paint and paintRgb disagree');
+  assert.deepEqual(paintRgb(SKY, 5), channels, 'paint and paintRgb disagree');
 });
 
 test('paintRgb clamps an intensity outside 0..10 instead of over- or under-saturating', () => {
@@ -166,8 +184,8 @@ test('two pains at the same intensity differ, and one pain at two intensities ke
   assert.notEqual(markerColor(episode, skyHigh), markerColor(episode, skyLow),
     'intensity stopped showing at all');
 
-  const hueHigh = hueOf(paintRgb(SKY, 9));
-  const hueLow = hueOf(paintRgb(SKY, 2));
+  const hueHigh = hueOf(rgbOf(markerColor(episode, skyHigh)));
+  const hueLow = hueOf(rgbOf(markerColor(episode, skyLow)));
   assert.ok(Math.abs(hueHigh - hueLow) < 0.005,
     'the same pain changed hue with intensity, which is exactly the old ambiguity');
 });
@@ -177,14 +195,19 @@ test('markerColor falls back to a palette colour, not an intensity ramp, when th
   const roseHue = hueOf(hexToRgb(ROSE));
   for (const i of INTENSITIES) {
     const m = defaultMarker(marker({ groupId: 'no-such-pain', intensity: i }));
-    assert.equal(markerColor(episode, m), paint(ROSE, i));
-    assert.ok(Math.abs(hueOf(paintRgb(ROSE, i)) - roseHue) < 0.005,
-      `the fallback shifted hue at intensity ${i}, so it is behaving like a ramp`);
+    const css = markerColor(episode, m);
+    // Hue first: "not a ramp" is the claim, and it is measured on what
+    // markerColor itself returned. The equality below only corroborates it.
+    assert.ok(Math.abs(hueOf(rgbOf(css)) - roseHue) < 0.005,
+      `the fallback painted ${css} at intensity ${i}, off the rose hue: it is behaving like a ramp`);
+    assert.equal(css, paint(ROSE, i), `the dangling groupId at intensity ${i} did not land on the first palette colour`);
   }
   const noGroup = defaultMarker(marker({ intensity: 3 }));
   assert.equal(noGroup.groupId, null);
   assert.equal(markerColor(episode, noGroup), paint(ROSE, 3),
     'a marker adoptOrphans has not reached yet must still paint, not throw');
+  assert.equal(markerColor(null, noGroup), paint(ROSE, 3),
+    'a share link decoded before the episode exists must not throw here, the way its sibling markerPattern does not');
 });
 
 test('markerPattern returns the pattern of the pain that owns the marker, and falls back to solid rather than leaving a decal blank', () => {
@@ -197,9 +220,19 @@ test('markerPattern returns the pattern of the pain that owns the marker, and fa
   assert.equal(markerPattern(episode, { groupId: null }), 'solid');
   assert.equal(markerPattern(null, { groupId: groups[0].id }), 'solid',
     'a share link decoded before the episode exists must not throw here');
-  assert.ok(isPattern(markerPattern(episode, { groupId: 'nope' })));
-  assert.equal(patternLabel(markerPattern(episode, { groupId: 'nope' })), 'solid',
-    'groups.js re-exports the pattern helpers so consumers import one module');
+
+  // Through a pattern whose spoken label differs from its id, so a patternLabel
+  // that merely echoes its argument cannot satisfy this.
+  assert.equal(groups[1].pattern, 'ring', 'the label check below reads through the second pain, which owns the ring glyph');
+  assert.equal(patternLabel(markerPattern(episode, defaultMarker(marker({ groupId: groups[1].id })))), 'ringed',
+    'groups.js must re-export the real patternLabel, which maps an id to a different spoken word');
+});
+
+test('groups.js re-exports the whole pattern vocabulary, because persist.js reads colorIndexOf and patternIndexOf from one module', () => {
+  assert.equal(REEXPORTED_PATTERNS, PATTERNS, 'the re-export must be the live table, not a copy that can drift');
+  assert.equal(patternIndexOf(patternAt(3)), 3, 'patternIndexOf and patternAt must be inverses; serializeForUrl round-trips through both');
+  assert.equal(patternIndexOf('no-such-shape'), -1);
+  assert.ok(isPattern(patternAt(0)) && !isPattern('no-such-shape'));
 });
 
 test('groupById answers null instead of throwing when there is no episode', () => {
@@ -228,21 +261,23 @@ test('nextGroupColor skips a taken colour even when it is not the next slot', ()
   assert.equal(nextGroupColor([{ color: '#123456' }]), ROSE, 'an off-palette colour occupies no slot');
 });
 
-test('a ninth pain still gets a real palette colour rather than undefined', () => {
+test('past the eighth pain nextGroupColor walks the palette again instead of collapsing onto one colour', () => {
   const exhausted = GROUP_COLORS.map(color => ({ color }));
+  const overflow = [];
   for (let extra = 0; extra < 5; extra++) {
     const color = nextGroupColor(exhausted);
-    assert.ok(GROUP_COLORS.includes(color),
-      `with the palette exhausted, pain ${exhausted.length + 1} was handed ${color}`);
+    overflow.push(color);
     exhausted.push({ color });
   }
+  assert.deepEqual(overflow, GROUP_COLORS.slice(0, 5),
+    'pains 9 to 13 must restart at the top of the palette, one slot each');
+  assert.equal(new Set(overflow).size, 5,
+    'the overflow pains all came out the same hue and are now indistinguishable from each other');
 });
 
-test('nextGroupPattern pairs with the colour slot, so a new pain differs on both channels at once', () => {
-  for (let i = 0; i < GROUP_COLORS.length; i++) {
-    assert.equal(nextGroupPattern([], GROUP_COLORS[i]), patternAt(i),
-      `slot ${i} did not get its twin pattern`);
-  }
+test('nextGroupPattern pairs slot for slot with the colour, so a new pain differs on both channels at once', () => {
+  assert.deepEqual(GROUP_COLORS.map(c => nextGroupPattern([], c)), PATTERNS.map(p => p.id),
+    'the colour slots and the shape slots came apart, so two pains can differ in hue while sharing a glyph');
 });
 
 test('nextGroupPattern picks a free shape when the paired one is already taken', () => {
@@ -260,16 +295,20 @@ test('eight pains get eight distinct colours and eight distinct patterns', () =>
     'two pains share a shape, so a greyscale reader cannot tell them apart');
 });
 
-test('a ninth pain still gets a real pattern rather than undefined', () => {
+test('past the eighth pain nextGroupPattern walks the shapes again instead of collapsing onto one glyph', () => {
   const groups = [];
   for (let i = 0; i < GROUP_COLORS.length; i++) groups.push(defaultGroup({}, groups));
+  const overflow = [];
   for (let extra = 0; extra < 5; extra++) {
     const color = nextGroupColor(groups);
     const pattern = nextGroupPattern(groups, color);
-    assert.ok(isPattern(pattern),
-      `with the shapes exhausted, pain ${groups.length + 1} was handed ${pattern}`);
+    overflow.push(pattern);
     groups.push({ color, pattern });
   }
+  assert.deepEqual(overflow, PATTERNS.slice(0, 5).map(p => p.id),
+    'pains 9 to 13 must restart at the top of the shape list, one glyph each');
+  assert.equal(new Set(overflow).size, 5,
+    'the greyscale channel collapsed: every pain past the eighth is drawn with the same glyph, for exactly the readers it exists for');
 });
 
 test('nextGroupPattern survives a colour that is not on the palette', () => {
@@ -287,12 +326,14 @@ test('cycleColor walks the palette and wraps, and an unknown colour lands on the
   assert.equal(cycleColor(undefined), GROUP_COLORS[0]);
 });
 
-test('colorIndexOf and colorName agree with the palette, and say "custom" off it', () => {
-  GROUP_COLORS.forEach((hex, i) => {
-    assert.equal(colorIndexOf(hex), i);
-    assert.equal(colorName(hex), GROUP_COLOR_NAMES[i]);
-  });
-  assert.equal(colorName(SKY), 'sky');
+test('every palette hex keeps the spoken name the legend reads aloud, and an off-palette one is "custom"', () => {
+  // Literal, not GROUP_COLOR_NAMES[i]: legend.js and painbar.js speak
+  // colorName(g.color) to a reader who cannot use the swatch, so a hex and its
+  // name drifting apart has to be visible here.
+  assert.deepEqual(GROUP_COLORS.map(colorName),
+    ['rose', 'sky', 'violet', 'amber', 'emerald', 'orange', 'cyan', 'fuchsia'],
+    'a palette hex is now announced by the wrong name');
+  GROUP_COLORS.forEach((hex, i) => assert.equal(colorIndexOf(hex), i));
   assert.equal(colorIndexOf('#123456'), -1);
   assert.equal(colorName('#123456'), 'custom');
   assert.equal(colorName(undefined), 'custom', 'the legend must never read "undefined" aloud');
@@ -309,10 +350,17 @@ test('hexToRgb decodes six-digit hex in both cases and round-trips the palette',
   }
 });
 
-test('js/utils.js no longer exports an intensity ramp, so hue cannot go back to meaning two things', () => {
-  const src = readSource('js/utils.js');
-  assert.doesNotMatch(src, /intensityColor/,
-    're-adding intensityColor is exactly how a red blob starts meaning "hurts a lot" again instead of "pain one"');
-  assert.doesNotMatch(src, /intensityRGB/i,
-    'the RGB twin of the old ramp is the same ambiguity by another name');
+test('no module in js/ exports an intensity ramp, so hue cannot go back to meaning two things', () => {
+  // The whole tree, case-insensitively, on the family of names rather than the
+  // one spelling that was removed: moving the ramp into another module or
+  // renaming it is the same regression. Comments are stripped first, because
+  // groups.js and patterns.js legitimately describe the old ramp in prose.
+  const strip = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  const RAMP = /intensity[_-]?(colou?rs?|rgb|ramp|scale)|(colou?r|rgb|ramp|scale)[_-]?(for|by|from)[_-]?intensity/i;
+  const files = readdirSync(join(ROOT, 'js')).filter(f => f.endsWith('.js') && !f.startsWith('neorgon-'));
+  assert.ok(files.length > 20, `only ${files.length} modules found in js/; this scan is checking air`);
+  for (const f of files) {
+    assert.doesNotMatch(strip(readSource(`js/${f}`)), RAMP,
+      `js/${f} names an intensity ramp again: that is exactly how a red blob starts meaning "hurts a lot" instead of "pain one"`);
+  }
 });

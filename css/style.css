@@ -1131,3 +1131,30 @@ body.explain-mode .pain-bar-label::after { content: ' shown'; }
   .stage-toolbar .chip-btn { font-size: 0.72rem; padding: 5px 9px; }
   .wide-only { display: none; }
 }
+
+/* The compare picker: offered in the explain view only when the map on screen
+   came from the library, so it can never quietly replace someone's own map. */
+.explain-compare {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+}
+.explain-compare label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.explain-compare select {
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-primary);
+  width: 100%;
+}

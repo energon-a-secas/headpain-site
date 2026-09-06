@@ -1,7 +1,7 @@
 // Zone registry — loads the baked zone atlas + metadata and exposes lookup maps.
 // Shared by the 3D view (picking, shader) and the UI panels (zone lists).
 
-import { VIRTUAL_ZONES } from './zones.js';
+import { ZONES, VIRTUAL_ZONES } from './zones.js';
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -26,7 +26,14 @@ export async function loadRegistry(base = 'assets/') {
 // Split from the fetch so tests can build the real registry from the real baked
 // atlas without a network or an <img>. Everything below is pure lookup-building.
 export function buildRegistry(baked, atlasImage) {
-  const zones = [...baked.zones].sort((a, b) => a.index - b.index);
+  // The bake carries geometry; js/zones.js carries the words. Merging them here
+  // is what makes zones.js the source of truth it says it is: mirrored zones
+  // bake into -left/-right pairs that both point back at one authored entry
+  // through baseId.
+  const authored = new Map(ZONES.map(z => [z.id, z]));
+  const zones = [...baked.zones]
+    .sort((a, b) => a.index - b.index)
+    .map(z => (authored.get(z.baseId)?.desc ? { ...z, desc: authored.get(z.baseId).desc } : z));
   const byIndex = new Map(zones.map(z => [z.index, z]));
   const byId = new Map(zones.map(z => [z.id, z]));
 

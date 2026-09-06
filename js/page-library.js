@@ -11,6 +11,26 @@ import { escHtml, $ } from './utils.js';
 
 const mappable = c => !c.notMappable && Array.isArray(c.primary) && c.primary.length > 0;
 
+// The pattern a reader is most likely to be confusing this one with. Migraine
+// is the honest default: one large study of self-diagnosed "sinus headache"
+// found 88% met migraine criteria, and it is the pattern most others get
+// mistaken for. A card never offers to compare a pattern with itself.
+const CONFUSED_WITH = {
+  'migraine-no-aura': 'tension-type',
+  'migraine-aura': 'migraine-no-aura',
+  'tension-type': 'migraine-no-aura',
+  'cluster-headache': 'paroxysmal-hemicrania',
+  'acute-rhinosinusitis': 'migraine-no-aura',
+  'cervicogenic-headache': 'occipital-neuralgia',
+  'occipital-neuralgia': 'cervicogenic-headache',
+};
+
+function compareTarget(c) {
+  const preferred = CONFUSED_WITH[c.id];
+  if (preferred && preferred !== c.id) return preferred;
+  return c.id === 'migraine-no-aura' ? 'tension-type' : 'migraine-no-aura';
+}
+
 const TIERS = [
   ['common', 'Common patterns', 'The ones most head pain turns out to be.'],
   ['advanced', 'Less common and structural', 'Rarer, and the ones most often mistaken for the common patterns.'],
@@ -34,6 +54,7 @@ function card(c) {
       <div class="lib-actions">
         ${canShow
           ? `<a class="btn btn--primary btn--sm" href="./?learn=${encodeURIComponent(c.id)}">See it on the head</a>
+             <a class="btn btn--secondary btn--sm" href="./?compare=${encodeURIComponent(c.id)},${encodeURIComponent(compareTarget(c))}">Compare</a>
              <a class="btn btn--secondary btn--sm" href="embed-builder.html?preset=${encodeURIComponent(c.id)}">Embed this</a>`
           : '<span class="fine-print">This one has no single place on the head to show.</span>'}
       </div>

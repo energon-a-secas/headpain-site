@@ -4,9 +4,10 @@
 // 3D view and embed.html can render with no app around them. Three things must
 // hold on every path out of it: the episode carries a camera (omitting it once
 // threw during boot, and the boot's catch reported a working browser as one that
-// cannot do 3D), every marker resolves to a real group (markerColor() has no
-// fallback, so a dangling groupId paints the wrong pain), and a zone this model
-// does not carry is skipped rather than placed somewhere plausible but wrong.
+// cannot do 3D), every marker resolves to a real group (markerColor() falls back
+// to GROUP_COLORS[0] rather than throwing, so a dangling groupId paints the
+// wrong pain in silence), and a zone this model does not carry is skipped rather
+// than placed somewhere plausible but wrong.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -61,14 +62,28 @@ test('plainEpisode always carries a camera with numeric theta/phi/dist', () => {
   assert.ok('impact' in ep, 'impact packs into the share tuple; an absent key is not the same as null');
 });
 
-test('episodeFromCondition carries a camera for every mappable condition', () => {
+// One camera literal in plainEpisode feeds both doors, so this loop re-checks a
+// single fact 25 times. It stays a loop only so a future entry point that builds
+// its own episode object is covered the day it is added; the per-condition and
+// per-demo facts that actually vary are asserted further down.
+test('every episode presets.js hands the embed carries a camera, whichever door it came through', () => {
   assert.ok(MAPPABLE.length > 5, 'the library shrank to nothing; the loop below would be vacuous');
+  assert.ok(DEMOS.length > 0, 'the demo shelf is empty; the loop below would be vacuous');
   for (const c of MAPPABLE) assertCamera(episodeFromCondition(c.id, registry), `condition ${c.id}`);
+  for (const d of DEMOS) assertCamera(episodeFromDemo(d.id, registry), `demo ${d.id}`);
 });
 
-test('episodeFromDemo carries a camera for every demo', () => {
-  assert.ok(DEMOS.length > 0);
-  for (const d of DEMOS) assertCamera(episodeFromDemo(d.id, registry), `demo ${d.id}`);
+test('plainEpisode stamps createdAt and updatedAt, which the legend prints and the impact chart bins', () => {
+  const before = Date.now();
+  const ep = plainEpisode('Stamped', [{ name: 'A', markers: [{ zoneId: ZONE_A }] }], registry);
+  for (const k of ['createdAt', 'updatedAt']) {
+    assert.equal(typeof ep[k], 'string',
+      `${k} is ${ep[k]}; legend.js prints it into the exported PNG and panel-impact.js feeds it to new Date()`);
+    const t = Date.parse(ep[k]);
+    assert.ok(Number.isFinite(t), `${k} "${ep[k]}" does not parse as a date, so the episode list prints "Invalid Date"`);
+    assert.ok(t >= before - 1000 && t <= Date.now() + 1000, `${k} is ${ep[k]}, which is not now`);
+  }
+  assert.equal(ep.createdAt, ep.updatedAt, 'a freshly built preset episode has never been edited; the two stamps must agree');
 });
 
 // ── every marker belongs to a pain ──────────────────────────────────────────
@@ -151,20 +166,56 @@ test('materializeSpots skips a zone this model does not carry instead of placing
   assert.deepEqual(out[0].n, registry.zoneById(ZONE_A).normal);
 });
 
-test('materializeSpots sends a virtual whole-head zone to WHOLE_HEAD_SPOT', () => {
+test('materializeSpots sends a virtual whole-head zone to the forehead spot, not to a missing anchor', () => {
   const [spot] = materializeSpots([{ zoneId: 'whole-head', intensity: 7 }], registry);
   assert.ok(spot, 'whole-head is a virtual zone the registry does carry; it must not be skipped');
-  assert.deepEqual(spot.p, WHOLE_HEAD_SPOT.p);
-  assert.deepEqual(spot.n, WHOLE_HEAD_SPOT.n);
+  // Literals rather than WHOLE_HEAD_SPOT: presets.js pushes that constant's own
+  // arrays, so comparing the spot to it compares a value with itself and moving
+  // the whole-head spot off the head entirely would still pass.
+  assert.deepEqual(spot.p, [0, 0.2, 0.95],
+    'the whole-head spot moved; a diffuse pain now renders somewhere else on the model');
+  assert.deepEqual(spot.n, [0, 0, 1], 'the whole-head normal no longer faces the viewer, so its decal renders edge-on');
+  assert.deepEqual(WHOLE_HEAD_SPOT.p, [0, 0.2, 0.95],
+    'the exported constant and the spot materializeSpots places have drifted apart; events.js places its own points from the constant');
   assert.equal(spot.intensity, 7, 'the rest of the marker must survive the position rewrite');
+  assert.equal(registry.zoneById('whole-head').anchor, undefined,
+    'whole-head gained an anchor, so this test no longer exercises the virtual branch it is named for');
 });
 
-test('materializeSpots copies the anchor, so moving a marker cannot move the zone', () => {
-  const before = [...registry.zoneById(ZONE_A).anchor];
+test('materializeSpots copies both anchor and normal, so editing a marker cannot move the zone', () => {
+  const zone = registry.zoneById(ZONE_A);
+  const anchor = [...zone.anchor];
+  const normal = [...zone.normal];
   const [spot] = materializeSpots([{ zoneId: ZONE_A }], registry);
+  assert.notEqual(spot.p, zone.anchor, 'the marker holds the registry anchor array itself, not a copy of it');
+  assert.notEqual(spot.n, zone.normal, 'the marker holds the registry normal array itself, not a copy of it');
   spot.p[0] = 999;
-  assert.deepEqual(registry.zoneById(ZONE_A).anchor, before,
+  spot.n[0] = -999;
+  assert.deepEqual(registry.zoneById(ZONE_A).anchor, anchor,
     'the marker aliased the registry anchor; dragging one point would move the zone for every episode');
+  assert.deepEqual(registry.zoneById(ZONE_A).normal, normal,
+    'the marker aliased the registry normal; re-orienting one point would tilt the zone for every episode');
+});
+
+// Pinned, not fixed: js/presets.js line 22 pushes the module constant itself for
+// a virtual zone (`? WHOLE_HEAD_SPOT :` where the real-zone branch spreads into
+// fresh arrays), so every whole-head marker in every episode shares one position
+// array with WHOLE_HEAD_SPOT, and events.js hands the same array to addMarker().
+// Nothing in js/ writes into marker.p today, which is why it has never shown.
+// The fix is `{ p: [...WHOLE_HEAD_SPOT.p], n: [...WHOLE_HEAD_SPOT.n] }`; this
+// test goes green the moment that lands.
+test('materializeSpots copies the whole-head spot too, so one whole-head marker cannot move every other', () => {
+  const saved = [...WHOLE_HEAD_SPOT.p];
+  try {
+    const [a] = materializeSpots([{ zoneId: 'whole-head' }], registry);
+    const [b] = materializeSpots([{ zoneId: 'whole-head' }], registry);
+    assert.notEqual(a.p, b.p, 'two separately materialized whole-head markers share one position array');
+    a.p[0] = 42;
+    assert.deepEqual(b.p, saved, 'writing to one whole-head marker moved another one');
+    assert.deepEqual(WHOLE_HEAD_SPOT.p, saved, 'writing to a marker rewrote the module constant every later marker reads');
+  } finally {
+    WHOLE_HEAD_SPOT.p.splice(0, WHOLE_HEAD_SPOT.p.length, ...saved);
+  }
 });
 
 test('materializeSpots treats a missing marker list as empty, since a demo group may carry none', () => {
@@ -195,10 +246,38 @@ test('episodeFromCondition returns null rather than an empty map for an unmappab
   assert.equal(episodeFromCondition(undefined, registry), null);
 });
 
+test('a condition flagged notMappable is refused even when it does carry mappable zones', () => {
+  // Both conditions the library flags notMappable today also carry `primary: []`,
+  // so the guard's `!c.primary?.length` clause already refuses them and the
+  // notMappable clause is invisible from outside: dropping it leaves every test
+  // above green. This pushes a condition that separates the two clauses, then
+  // takes it straight back out.
+  const synthetic = {
+    id: 'synthetic-notmappable', name: 'Synthetic notMappable', tier: 'common',
+    notMappable: true, primary: [ZONE_A, ZONE_B], laterality: 'any',
+    depths: ['surface'], qualities: ['dull-ache'], intensity: [3, 5]
+  };
+  CONDITIONS.push(synthetic);
+  try {
+    assert.ok(conditionById(synthetic.id), 'the fixture never reached conditionById; this test proves nothing');
+    assert.equal(episodeFromCondition(synthetic.id, registry), null,
+      'a condition the library says must not be mapped was mapped anyway; the card explains why it has no shape and the head would contradict it');
+  } finally {
+    CONDITIONS.splice(CONDITIONS.indexOf(synthetic), 1);
+  }
+  assert.equal(conditionById(synthetic.id), null, 'the fixture leaked into the real library');
+});
+
 test('the null paths name conditions that still exist, so this test cannot rot into a tautology', () => {
-  assert.ok(conditionById('chiari-2')?.notMappable, 'chiari-2 is no longer the notMappable case');
+  const unmappable = conditionById('chiari-2');
+  assert.ok(unmappable?.notMappable, 'chiari-2 is no longer the notMappable case');
+  // Also empty, which is why the notMappable clause is defence in depth here and
+  // is proved separately above rather than through chiari-2.
+  assert.equal(unmappable.primary.length, 0,
+    'chiari-2 gained primary zones; the line above now covers the notMappable clause on its own, so say so');
   const noPrimary = conditionById('secondary-red-flag-pattern');
   assert.ok(noPrimary, 'secondary-red-flag-pattern was renamed');
+  assert.ok(!noPrimary.notMappable, 'secondary-red-flag-pattern is now notMappable too, so it no longer isolates the empty-zones clause');
   assert.ok(!noPrimary.primary?.length, 'secondary-red-flag-pattern gained primary zones');
   assert.equal(conditionById('no-such-condition'), null);
 });
@@ -210,6 +289,30 @@ test('episodeFromDemo returns null for an unknown demo id', () => {
 });
 
 // ── coverage: a renamed condition must not silently empty a demo ────────────
+
+test('every demo group names a condition the library still carries, since presetMarkers(null) throws', () => {
+  const ids = DEMOS.flatMap(d => d.groups.map(g => [d.id, g.conditionId])).filter(([, id]) => id);
+  assert.ok(ids.length > 0, 'no demo group points at a condition any more; the check below is vacuous');
+  for (const [demoId, conditionId] of ids) {
+    assert.ok(conditionById(conditionId),
+      `demo ${demoId} points at condition "${conditionId}", which the library no longer has; opening it throws inside presetMarkers instead of showing anything`);
+  }
+});
+
+test('a demo whose condition was renamed fails loudly rather than rendering an empty head', () => {
+  const synthetic = {
+    id: 'synthetic-demo', title: 'Synthetic demo',
+    groups: [{ conditionId: 'condition-renamed-away', name: 'Gone' }]
+  };
+  DEMOS.push(synthetic);
+  try {
+    assert.throws(() => episodeFromDemo(synthetic.id, registry), TypeError,
+      'a dangling conditionId no longer throws; if the group is now skipped or the episode is null, that is a better contract, but the demo shelf must then be checked for empty maps instead of for crashes');
+  } finally {
+    DEMOS.splice(DEMOS.indexOf(synthetic), 1);
+  }
+  assert.equal(demoById(synthetic.id), null, 'the fixture leaked into the real demo shelf');
+});
 
 test('every demo id produces an episode with markers, catching a demo pointing at a renamed condition', () => {
   for (const d of DEMOS) {
@@ -231,6 +334,18 @@ test('every mappable condition produces an episode with markers on real zones', 
     assert.equal(ep.groups[0].name, shortName(c.name), 'the legend gets the short name, the episode the long one');
     for (const m of ep.markers) assert.ok(registry.zoneById(m.zoneId), `${c.id}: marker on unknown zone ${m.zoneId}`);
   }
+});
+
+// The loop above recomputes the expected name with shortName itself, so it only
+// notices shortName not being applied at all. These two spell the long/short
+// contrast out, so a change to the trimming rule is visible here as well.
+test('the legend chip for a long condition name is the trimmed one, the episode title the full one', () => {
+  const sinus = episodeFromCondition('acute-rhinosinusitis', registry);
+  assert.equal(sinus.title, 'Acute rhinosinusitis (true "sinus headache")');
+  assert.equal(sinus.groups[0].name, 'Acute rhinosinusitis');
+  const gca = episodeFromCondition('giant-cell-arteritis', registry);
+  assert.equal(gca.title, 'Giant cell (temporal) arteritis: pattern');
+  assert.equal(gca.groups[0].name, 'Giant cell', 'the split takes everything from the first " (" onwards, mid-name included');
 });
 
 // ── shortName ───────────────────────────────────────────────────────────────

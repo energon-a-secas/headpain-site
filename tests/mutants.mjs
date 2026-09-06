@@ -124,6 +124,65 @@ const MUTANTS = [
     find: "  if (updates.groupId !== undefined && ep.groups.some(g => g.id === updates.groupId)) m.groupId = updates.groupId;",
     replace: '  if (updates.groupId !== undefined) m.groupId = updates.groupId;',
   },
+  // ── Added after an adversarial audit proved the suite was blind to these ──
+  // Each one is a behaviour a test *claimed* to protect while asserting only
+  // membership, or restating the source's own computation back at it.
+  {
+    id: 'colour-names-swapped',
+    file: 'js/groups.js',
+    why: 'announces the wrong colour to a reader who cannot use the swatch',
+    find: "export const GROUP_COLOR_NAMES = ['rose', 'sky', 'violet',",
+    replace: "export const GROUP_COLOR_NAMES = ['violet', 'sky', 'rose',",
+  },
+  {
+    id: 'palette-overflow-collapses',
+    file: 'js/groups.js',
+    why: 'gives every pain past the eighth the same hue instead of rotating the palette',
+    find: '  return GROUP_COLORS.find(c => !used.has(c)) || GROUP_COLORS[groups.length % GROUP_COLORS.length];',
+    replace: '  return GROUP_COLORS.find(c => !used.has(c)) || GROUP_COLORS[0];',
+  },
+  {
+    id: 'shape-overflow-collapses',
+    file: 'js/groups.js',
+    why: 'gives every pain past the eighth the same glyph, collapsing the greyscale channel',
+    find: "  return PATTERNS.map(p => p.id).find(p => !used.has(p)) || patternAt(groups.length);",
+    replace: "  return PATTERNS.map(p => p.id).find(p => !used.has(p)) || patternAt(0);",
+  },
+  {
+    id: 'has-impact-ignores-days',
+    file: 'js/impact.js',
+    why: 'an episode whose only answer is days-lost reports as having no impact at all',
+    find: "  return Boolean(impact.frequency || impact.duration || impact.daysLost\n    || impact.blocked?.length || impact.symptoms?.length || impact.relief?.length);",
+    replace: "  return Boolean(impact.frequency || impact.duration\n    || impact.blocked?.length || impact.symptoms?.length || impact.relief?.length);",
+  },
+  {
+    id: 'active-pain-not-repaired',
+    file: 'js/state.js',
+    why: 'leaves activeGroupId pointing at a deleted pain, so the next point lands nowhere',
+    find: '  if (!ep.groups.some(g => g.id === state.activeGroupId)) {\n    state.activeGroupId = ep.groups[0]?.id || null;\n  }',
+    replace: '  if (!state.activeGroupId) {\n    state.activeGroupId = ep.groups[0]?.id || null;\n  }',
+  },
+  {
+    id: 'shared-link-overwrites-diary',
+    file: 'js/persist.js',
+    why: 'opening somebody else\'s share link saves it over your own episodes',
+    find: '  if (state.shared) return; // viewing a shared link — never overwrite the local diary',
+    replace: '  // MUTANT: the guard that protects the local diary is gone',
+  },
+  {
+    id: 'legend-stops-escaping',
+    file: 'js/legend.js',
+    why: 'a pain named with a tag becomes live markup in the legend of a shared map',
+    find: '          <span class="legend-name">${escHtml(p.name)}</span>',
+    replace: '          <span class="legend-name">${p.name}</span>',
+  },
+  {
+    id: 'laterality-note-dropped',
+    file: 'js/conditions.js',
+    why: 'silently removes the one-sided-versus-both-sides reasoning from the explanation',
+    find: '  if (r.latNote) parts.push(r.latNote);',
+    replace: '',
+  },
   {
     id: 'intensity-not-clamped',
     file: 'js/state.js',
