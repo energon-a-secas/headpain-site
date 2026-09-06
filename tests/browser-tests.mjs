@@ -13,6 +13,15 @@ const restoreDiary = () => {
   else localStorage.setItem('headmap-v2', SAVED_DIARY);
 };
 
+// state.episodes[0] is the NEWEST episode, not necessarily the active one:
+// loadFromStorage restores activeEpisodeId from the payload, and createEpisode
+// unshifts. Reading [0] happens to work on a fresh diary and silently reads a
+// different episode the moment one was restored.
+const activeEp = ctx => {
+  const s = ctx.win.__headmap.state;
+  return s.episodes.find(e => e.id === s.activeEpisodeId) || s.episodes[0];
+};
+
 const appReady = ctx => until(
   () => ctx.win.__headmap && ctx.win.__headmap.actions && ctx.doc.querySelector('#stage-loader')?.hidden,
   { label: 'the app to finish loading its 3D head' }
@@ -37,7 +46,7 @@ await it('the app boots with an empty diary and logs no console errors', async (
   await withApp('', async ctx => {
     assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
     assert.ok(ctx.doc.querySelector('#stage-fallback').hidden, 'the 3D fallback should stay hidden');
-    assert.equal(ctx.win.__headmap.state.episodes[0].groups.length, 0, 'a fresh diary has no pains yet');
+    assert.equal(activeEp(ctx).groups.length, 0, 'a fresh diary has no pains yet');
   });
 });
 
@@ -48,7 +57,7 @@ await it('a ?learn= link renders a published pattern and does not report a broke
   await withApp('?learn=cluster-headache', async ctx => {
     assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
     assert.ok(ctx.doc.querySelector('#stage-fallback').hidden, 'the fallback fired, so boot threw');
-    const ep = ctx.win.__headmap.state.episodes[0];
+    const ep = activeEp(ctx);
     assert.includes(ep.title.toLowerCase(), 'cluster');
     assert.gt(ep.markers.length, 0);
     assert.ok(ctx.win.__headmap.state.explain, 'a learn link should open read-only');
@@ -76,7 +85,7 @@ group('pains');
 await it('the first point creates a pain and joins it, with no visit to a New Group button', async () => {
   await withApp('', async ctx => {
     ctx.win.__headmap.actions.addPointForZone('temple-left');
-    const ep = ctx.win.__headmap.state.episodes[0];
+    const ep = activeEp(ctx);
     assert.equal(ep.groups.length, 1);
     assert.equal(ep.markers.length, 1);
     assert.equal(ep.markers[0].groupId, ep.groups[0].id, 'the point did not join the pain');
@@ -89,7 +98,7 @@ await it('the pain bar shows one chip per pain, each with a glyph and a count', 
     a.addPointForZone('temple-left');
     a.newPain();
     ctx.doc.querySelector('.pain-rename')?.blur();
-    const ep = ctx.win.__headmap.state.episodes[0];
+    const ep = activeEp(ctx);
     a.setActivePain(ep.groups[1].id);
     a.addPointForZone('neck-back-upper');
     const chips = ctx.doc.querySelectorAll('.pain-chip');
@@ -107,7 +116,7 @@ await it('two pains get two different glyphs on the head, not just two hues', as
     a.addPointForZone('temple-left');
     a.newPain();
     ctx.doc.querySelector('.pain-rename')?.blur();
-    const ep = ctx.win.__headmap.state.episodes[0];
+    const ep = activeEp(ctx);
     a.setActivePain(ep.groups[1].id);
     a.addPointForZone('neck-back-upper');
     assert.notEqual(ep.groups[0].pattern, ep.groups[1].pattern);
@@ -126,7 +135,7 @@ await it('isolating a pain does not redirect where the next point lands', async 
     a.addPointForZone('temple-left');
     a.newPain();
     ctx.doc.querySelector('.pain-rename')?.blur();
-    const ep = s.episodes[0];
+    const ep = activeEp(ctx);
     a.setActivePain(ep.groups[1].id);
     const activeBefore = s.activeGroupId;
     a.isolatePain(ep.groups[0].id);
@@ -157,7 +166,7 @@ await it('the exported PNG is taller than the canvas and carries the legend text
   await withApp('?learn=demo-combo', async ctx => {
     const { head, state, registry } = ctx.win.__headmap;
     const { buildLegend, drawLegendPng, legendPngHeight } = await import('../js/legend.js');
-    const ep = state.episodes[0];
+    const ep = activeEp(ctx);
     const model = buildLegend(ep, registry.zoneById);
     const canvas = head.getCanvas();
     head.renderNow();
@@ -390,10 +399,10 @@ await it('an impact chip toggles once per click, not once per past render', asyn
     a.setTab('impact');
     for (let i = 0; i < 5; i++) a.renderAll();
     ctx.doc.querySelector('[data-blocked="work"]').click();
-    const ep = ctx.win.__headmap.state.episodes[0];
+    const ep = activeEp(ctx);
     assert.equal(ep.impact.blocked.length, 1, `blocked = ${JSON.stringify(ep.impact.blocked)}`);
     ctx.doc.querySelector('[data-blocked="work"]').click();
-    assert.equal(ctx.win.__headmap.state.episodes[0].impact.blocked.length, 0);
+    assert.equal(activeEp(ctx).impact.blocked.length, 0);
   });
 });
 
@@ -403,15 +412,15 @@ await it('the colour and shape popover offers both channels and applies them in 
     ctx.doc.querySelector('[data-style]').click();
     const swatches = ctx.doc.querySelectorAll('.style-pop .style-swatch');
     assert.equal(swatches.length, 16, 'expected 8 colours and 8 shapes');
-    const pain = ctx.win.__headmap.state.episodes[0].groups[0];
+    const pain = activeEp(ctx).groups[0];
     const before = { color: pain.color, pattern: pain.pattern };
     // The popover stays open across a choice on purpose: picking a colour and
     // then a shape is one visit, not two.
     ctx.doc.querySelector('.style-pop [data-pattern="grid"]').click();
-    assert.equal(ctx.win.__headmap.state.episodes[0].groups[0].pattern, 'grid');
+    assert.equal(activeEp(ctx).groups[0].pattern, 'grid');
     assert.ok(ctx.doc.querySelector('.style-pop'), 'the popover closed after one choice');
     ctx.doc.querySelector('.style-pop [data-color="#22d3ee"]').click();
-    const after = ctx.win.__headmap.state.episodes[0].groups[0];
+    const after = activeEp(ctx).groups[0];
     assert.equal(after.color, '#22d3ee');
     assert.notEqual(after.color, before.color);
   });
@@ -474,7 +483,7 @@ await it('a share link opens the map the sender built, in the view they chose', 
     await appReady(ctx);
     assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
     assert.ok(ctx.win.__headmap.state.explain, 'the link did not open read-only');
-    assert.equal(ctx.win.__headmap.state.episodes[0].groups.length, 2);
+    assert.equal(activeEp(ctx).groups.length, 2);
     assert.ok(ctx.doc.querySelector('#stage-legend .legend'), 'no legend for the recipient');
   } finally { ctx.destroy(); restoreDiary(); }
 });
@@ -485,7 +494,7 @@ group('compare');
 await it('?compare= puts two published patterns on one head as two distinguishable pains', async () => {
   await withApp('?compare=migraine-no-aura,tension-type', async ctx => {
     assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
-    const ep = ctx.win.__headmap.state.episodes[0];
+    const ep = activeEp(ctx);
     assert.equal(ep.groups.length, 2);
     assert.notEqual(ep.groups[0].color, ep.groups[1].color, 'both patterns came out the same hue');
     assert.notEqual(ep.groups[0].pattern, ep.groups[1].pattern, 'both patterns came out the same glyph');
@@ -501,7 +510,7 @@ await it('?compare= puts two published patterns on one head as two distinguishab
 await it('a comparison can be narrowed to one pattern at a time', async () => {
   await withApp('?compare=cluster-headache,migraine-no-aura', async ctx => {
     const s = ctx.win.__headmap.state;
-    const first = s.episodes[0].groups[0];
+    const first = activeEp(ctx).groups[0];
     ctx.win.__headmap.actions.isolatePain(first.id);
     assert.equal(s.isolateGroupId, first.id);
     assert.equal(ctx.doc.querySelectorAll('.legend-row.faded').length, 1,
@@ -527,7 +536,7 @@ await it('a bad comparison says so instead of opening an empty head', async () =
   await withApp('?compare=not-a-pattern,also-not-real', async ctx => {
     assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
     assert.ok(!ctx.win.__headmap.state.explain, 'an unusable comparison still opened the read-only view');
-    assert.equal(ctx.win.__headmap.state.episodes[0].markers.length, 0);
+    assert.equal(activeEp(ctx).markers.length, 0);
   });
 });
 
