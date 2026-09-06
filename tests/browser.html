@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>HeadPain browser tests</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; padding: 24px; background: #040714; color: #f9f9f9;
+      font: 14px/1.55 'Avenir Next', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+    h1 { font-size: 1.15rem; margin: 0 0 4px; }
+    p.lede { margin: 0 0 20px; color: rgba(255,255,255,.55); max-width: 70ch; }
+    h2 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+         color: rgba(255,255,255,.45); margin: 22px 0 6px; }
+    .tally { font-size: 1.05rem; font-weight: 700; padding: 10px 14px; border-radius: 10px; }
+    .tally.good { background: rgba(16,185,129,.14); border: 1px solid rgba(16,185,129,.35); color: #34d399; }
+    .tally.bad  { background: rgba(244,63,94,.12);  border: 1px solid rgba(244,63,94,.4);  color: #fb7185; }
+    table { border-collapse: collapse; width: 100%; max-width: 900px; }
+    td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.07); vertical-align: top; }
+    .mark { width: 1.4em; }
+    tr.ok .mark { color: #34d399; }
+    tr.no .mark { color: #fb7185; }
+    tr.no td { background: rgba(244,63,94,.06); }
+    .ms { width: 5em; text-align: right; color: rgba(255,255,255,.35);
+          font-variant-numeric: tabular-nums; }
+    .err { margin-top: 4px; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; color: #fb7185; }
+    .running { color: rgba(255,255,255,.5); }
+  </style>
+</head>
+<body>
+  <h1>HeadPain browser tests</h1>
+  <p class="lede">
+    What the Node suite structurally cannot reach: WebGL, the boot path, DOM overlap, the
+    iframe embed and its postMessage contract. Run <code>make test</code> for everything else.
+    This page borrows this origin's localStorage and puts it back when it finishes.
+  </p>
+  <div id="out"><span class="running">Running…</span></div>
+  <script type="module" src="./browser-tests.mjs"></script>
+</body>
+</html>

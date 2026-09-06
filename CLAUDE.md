@@ -21,6 +21,8 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `index.html` | The app. `?explain=1` opens read-only, `?learn=<pattern>` opens a library pattern read-only. |
 | `embed.html` | The embeddable widget. Never reads localStorage; renders only what its URL carries. |
 | `embed-builder.html` | A form that writes the iframe snippet, with a live preview and a working postMessage console. |
+| `headache-patterns.html` | The reading index over the condition library, built at runtime from `CONDITIONS` so it cannot drift from what the matcher scores. Each card deep-links to `?learn=`. |
+| `tests/browser.html` | The browser integration suite. Not linked, `noindex`. |
 
 ## Architecture
 
@@ -74,6 +76,34 @@ unreadable, and it is exactly what was wrong before 2026-09-05.
 Colour alone is not enough: it is gone in greyscale, on a printout, and for a
 red-green colour-blind reader. That is why every pain owns a shape too, and why
 the legend spells both out in words ("sky, ringed").
+
+## Tests
+
+```bash
+make test           # unit suite, Node's own runner, no npm install
+make test-mutants   # proof the unit suite catches real breakage
+make test-browser   # serves the site; open /tests/browser.html
+```
+
+Three layers, described in `tests/README.md`. The short version:
+
+- **Unit** (`tests/*.test.mjs`): every module that does not import `three` runs
+  under Node unmodified. `tests/shim.mjs` supplies the call-time browser globals
+  and a *recording* canvas context, so PNG tests assert on the text drawn rather
+  than on pixels. `tests/fixtures.mjs` builds the registry from the real
+  `assets/zones.baked.json`, because a test against an invented zone id passes
+  while the app renders nothing.
+- **Browser** (`tests/browser.html`): WebGL, the boot path, DOM overlap, the
+  iframe embed and its postMessage contract. Console errors are failures.
+- **Mutation** (`tests/mutants.mjs`): breaks `js/` in ways the suite claims to
+  catch and fails if it stays green. A surviving mutant is a coverage gap; a
+  skipped one means its anchor text drifted and needs updating.
+
+Node 22 and later already define `globalThis.localStorage`, but it is inert
+without `--localstorage-file`. The shim overwrites it rather than deferring to
+it, and probes it at import time, because the obvious
+`if (!globalThis.localStorage)` guard silently leaves every storage test running
+against a stub.
 
 ## Data
 

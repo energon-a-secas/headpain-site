@@ -309,6 +309,13 @@ export function toggleImpactOption(key, id) {
   updateImpact({ [key]: current.includes(id) ? current.filter(v => v !== id) : [...current, id] });
 }
 
+// Back to a single empty episode. Lives here rather than in persist.js because
+// it resets the live model and needs defaultState(), which is private to this
+// file: on the wrong side of the seam it threw ReferenceError on every call.
+export function resetToDefaults() {
+  Object.assign(state, defaultState());
+}
+
 export function setView(view) {
   state.view = view === 'xray' ? 'xray' : 'normal';
 }

@@ -268,6 +268,4 @@ export function loadFromStorage() {
   }
 }
 
-export function resetToDefaults() {
-  Object.assign(state, defaultState());
-}
+

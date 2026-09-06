@@ -53,7 +53,8 @@ HeadPain is a communication aid, not a diagnosis. Everything stays in the browse
 - **Explain view**: `?explain=1`, or the Explain button, opens the map read-only with plain-English cards for a doctor, a partner, or work. "Copy link to show someone" produces exactly that link.
 - **Life impact**: how often it comes, how long it lasts, what it stops you doing, what comes with it, what helps, and days lost last month, shown back as sentences and carried into the explain view, the share link and the PNG. A trend strip charts the worst level across the diary.
 - **Embeddable**: `embed.html` with a documented URL contract (`map`, `preset`, `demo`, `xray`, `isolate`, `legend`, `controls`, `rotate`, `camera`, `title`, `bg`) and a `postMessage` API so a host page can drive it. `embed-builder.html` writes the snippet. An embed never reads the visitor's saved diary.
-- **Learning resource**: every published pattern has `?learn=<pattern>`, which opens it on the head read-only with its own explanation (what it feels like, its timing, how it is told apart, its red flags), without touching the reader's own maps. Seven example maps sit at the foot of the Patterns tab.
+- **Learning resource**: [headache-patterns.html](https://headpain.neorgon.com/headache-patterns.html) is a reading index over the whole library, built at runtime from the same data the matcher scores, so it cannot drift. Every pattern has `?learn=<pattern>`, which opens it on the head read-only with its own explanation (what it feels like, its timing, how it is told apart, its red flags), without touching the reader's own maps. Seven example maps sit at the foot of the Patterns tab.
+- **Tested**: a unit suite on Node's own runner (no npm install, no `node_modules`), a browser suite for WebGL, layout overlap and the embed's postMessage contract, and a mutation harness that breaks the source on purpose and fails if the suite stays green. `make test`, `make test-browser`, `make test-mutants`.
 - **Intensity guidance**: at 7/10 a "stop it reaching 8" card, at 8–10 a treat-early card (dark quiet room, cold pack, no screens) plus a root-cause note about medication-overuse. Educational, non-drug, non-diagnostic.
 - **Condition matcher**: transparent scoring (zone overlap + laterality + quality + depth) against 21 common and advanced patterns, with differentiators, red flags, and presets that load either as a fresh map or as a new group alongside existing points.
 - **Safety first**: persistent "cannot diagnose" banner, red-flag list (thunderclap, worst-ever, neuro signs…), and capped match percentages that are explained as resemblance, not probability.
@@ -77,6 +78,26 @@ Or manually:
 ```bash
 python3 -m http.server 8846
 ```
+
+## Tests
+
+No npm install, no `node_modules`, nothing to set up. Node's own test runner and
+a page you open.
+
+```bash
+make test           # unit suite over every module that does not import three
+make test-browser   # serves the site; open /tests/browser.html
+make test-mutants   # breaks the source on purpose; fails if the suite stays green
+```
+
+The mutation layer is the one worth explaining. A test that cannot fail is worse
+than no test, because it gets quoted, so `tests/mutants.mjs` reverts the
+share-link encoder to raw `btoa`, makes `paint()` ignore intensity, drops
+`adoptOrphans` from the load path, removes the `camera` from a preset episode,
+and a dozen more, then fails if the suite stayed green. Every mutant is a
+regression this project has either shipped or nearly shipped.
+
+See [tests/README.md](tests/README.md) for the layer boundaries and how to add to them.
 
 ---
 

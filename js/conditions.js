@@ -298,15 +298,16 @@ export function scoreConditions(markers, zoneById) {
     // 1. intensity-weighted zone overlap (0–70)
     let weighted = 0;
     const hitZones = new Set();
+    let hitPoints = 0; // markers, not distinct zones: two taps on one temple are two points
     for (const m of markers) {
       const i = Math.max(1, m.intensity);
       let w = 0;
       if (m.zoneId === 'whole-head') {
         w = c.diffuseTolerant ? 0.6 : 0;
       } else if (c.primary.includes(m.zoneId)) {
-        w = 1.0; hitZones.add(m.zoneId);
+        w = 1.0; hitZones.add(m.zoneId); hitPoints++;
       } else if (c.secondary.includes(m.zoneId)) {
-        w = 0.4; hitZones.add(m.zoneId);
+        w = 0.4; hitZones.add(m.zoneId); hitPoints++;
       }
       weighted += i * w;
     }
@@ -341,7 +342,7 @@ export function scoreConditions(markers, zoneById) {
     const score = Math.max(0, Math.min(95, Math.round(raw)));
     if (score < 30) continue;
 
-    results.push({ condition: c, score, hitZones: [...hitZones], latNote, matchedQ });
+    results.push({ condition: c, score, hitZones: [...hitZones], hitPoints, latNote, matchedQ });
   }
 
   return results
@@ -352,8 +353,8 @@ export function scoreConditions(markers, zoneById) {
 
 function explain(r, markerCount) {
   const parts = [];
-  if (r.hitZones.length) {
-    parts.push(`${r.hitZones.length} of your ${markerCount} point${markerCount === 1 ? '' : 's'} ` +
+  if (r.hitPoints) {
+    parts.push(`${r.hitPoints} of your ${markerCount} point${markerCount === 1 ? '' : 's'} ` +
       `${markerCount === 1 ? 'is' : 'are'} in zones typical of this pattern`);
   } else {
     parts.push('Your points only loosely overlap this pattern');

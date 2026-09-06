@@ -89,8 +89,8 @@ export function normalizeImpact(raw) {
   base.blocked = filter(BLOCKED, raw.blocked);
   base.symptoms = filter(SYMPTOMS, raw.symptoms);
   base.relief = filter(RELIEF, raw.relief);
-  const days = Number(raw.daysLost);
-  base.daysLost = Number.isFinite(days) && days > 0 ? Math.min(31, Math.round(days)) : null;
+  const days = Math.round(Number(raw.daysLost));
+  base.daysLost = Number.isFinite(days) && days > 0 ? Math.min(31, days) : null;
   return base;
 }
 
