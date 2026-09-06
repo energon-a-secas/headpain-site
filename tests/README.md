@@ -65,6 +65,20 @@ It refuses to start on a dirty `js/` tree, restores in a `finally`, and verifies
 gap, not a pass. A **skipped** mutant means its anchor text no longer matches the
 source: update `tests/mutants.mjs` rather than ignoring it.
 
+Run it over the **whole** suite, never one file. A gap in one file is not a gap if
+a sibling covers it: an audit of `groups.test.mjs` alone reported that shuffling
+`GROUP_COLOR_NAMES` went undetected, and it does, by that file, while
+`legend.test.mjs` catches it with three failures.
+
+Before adding a mutant, **prove it can fail**. Three were removed for being
+unkillable, each one checked rather than assumed: `normalizeEpisode`'s
+dangling-groupId cleanup is subsumed by `adoptOrphans` two lines later; the 0 and
+95 clamps on a match score are unreachable (the best any condition can score with
+its own ideal map is 90, and everything under 30 is discarded); and `commaList`'s
+two-item branch built the same string as the general path, so it was deleted as
+dead code instead. An unkillable mutant is worse than no mutant, because the gate
+goes permanently red and people learn to ignore it.
+
 ## Why the tests are worded the way they are
 
 The suite was written, then adversarially audited: every test was checked by

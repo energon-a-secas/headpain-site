@@ -223,6 +223,13 @@ function bake() {
       let u = sub(tHint, n.map(c => c * dot(tHint, n)));
       u = len(u) < 1e-4 ? norm(cross(n, [0, 1, 0])) : norm(u);
       const w = norm(cross(n, u));
+      // No `desc` here on purpose. This file bakes geometry; js/zones.js owns
+      // the words, and buildRegistry() merges them back on by baseId at load.
+      // That merge did not exist until 2026-09-05, so every one of the 55
+      // authored descriptions was silently absent at runtime: the plain-language
+      // line under the point editor and every zone-browser tooltip rendered
+      // empty. Adding `desc` here instead would put the same string in two
+      // files, and re-baking is the rarer of the two operations.
       zones.push({
         id: v.suffix ? `${z.id}-${v.suffix}` : z.id,
         baseId: z.id,

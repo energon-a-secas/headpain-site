@@ -22,19 +22,194 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 //
 //   normalizeEpisode's dangling-groupId cleanup: adoptOrphans, two lines later,
 //   catches exactly the same markers and sends them to the same pain. Verified
-//   by running the mutation: identical output.
+//   by running the mutation and diffing the output.
 //
 //   the 0 and 95 clamps on a match score: the highest score any condition can
 //   reach with its own ideal map is 90 (measured across the whole library), and
 //   `if (score < 30) continue` discards everything the floor could touch.
 //
 //   commaList's two-item branch: the general path builds the identical string
-//   for two items. Removed from js/legend.js as dead code rather than mutated.
+//   for two items, so it was deleted from js/legend.js as dead code instead.
 //
 // An unkillable mutant is worse than no mutant: the gate goes permanently red
 // and people learn to ignore it. If you add one, prove it can fail first.
 
+// A silent shrink is the failure this harness exists to prevent, so it refuses
+// to run as a smaller gate than it was built to be. Raise this with the list.
+const EXPECTED_MUTANTS = 33;
+
 const MUTANTS = [
+  {
+    id: 'btoa-latin1',
+    file: 'js/utils.js',
+    why: 'reverts the share-link encoder to raw btoa, which throws on a curly apostrophe',
+    find: 'const bytes = new TextEncoder().encode(str);',
+    replace: 'const bytes = Array.from(str, c => c.charCodeAt(0));',
+  },
+  {
+    id: 'paint-ignores-intensity',
+    file: 'js/groups.js',
+    why: 'makes every intensity paint the same, so the map stops showing how bad it is',
+    find: 'return hslToRgb([h, s * (MIN_SAT + (1 - MIN_SAT) * t), l]);',
+    replace: 'return hslToRgb([h, s, l]);',
+  },
+  {
+    id: 'pattern-collision',
+    file: 'js/groups.js',
+    why: 'gives every pain the same glyph, so two pains are identical in greyscale',
+    find: 'export function nextGroupPattern(groups, color) {',
+    replace: "export function nextGroupPattern(groups, color) {\n  return 'solid'; // MUTANT",
+  },
+  {
+    id: 'orphans-survive-delete',
+    file: 'js/state.js',
+    why: 'restores the old behaviour where deleting a pain left its points ungrouped',
+    find: '  ep.markers = ep.markers.filter(m => m.groupId !== id);',
+    replace: '  for (const m of ep.markers) if (m.groupId === id) m.groupId = null;',
+  },
+  {
+    id: 'isolate-hijacks-placement',
+    file: 'js/state.js',
+    why: 'remerges the two ids, so looking at one pain redirects where the next tap lands',
+    find: '  state.isolateGroupId = id && ep?.groups.some(g => g.id === id) ? id : null;',
+    replace: '  state.isolateGroupId = id && ep?.groups.some(g => g.id === id) ? id : null;\n  state.activeGroupId = state.isolateGroupId || state.activeGroupId; // MUTANT',
+  },
+  {
+    id: 'no-adopt-on-load',
+    file: 'js/persist.js',
+    why: 'stops migrating stored maps, so legacy points come back with no pain',
+    find: '  return adoptOrphans({',
+    replace: '  return ({',
+  },
+  {
+    id: 'preset-episode-has-no-camera',
+    file: 'js/presets.js',
+    why: 'the exact omission that made a ?learn= link report itself as an unsupported browser',
+    find: '    camera: { theta: 0, phi: Math.PI / 2, dist: 4.9 },\n    impact: null,',
+    replace: '    impact: null,',
+  },
+  {
+    id: 'share-link-does-not-truncate',
+    file: 'js/persist.js',
+    why: 'drops the marker cap, so a long map produces an oversized URL with no warning',
+    find: 'ep.markers.slice(0, URL_MARKER_CAP)',
+    replace: 'ep.markers',
+  },
+  {
+    id: 'impact-bitmask-off-by-one',
+    file: 'js/impact.js',
+    why: 'shifts the packed bitmask, so a shared link reports the wrong activities',
+    find: '  return i >= 0 ? bits | (1 << i) : bits;',
+    replace: '  return i >= 0 ? bits | (1 << (i + 1)) : bits;',
+  },
+  {
+    id: 'legend-uses-form-labels',
+    file: 'js/legend.js',
+    why: 'puts form labels in the sentence a patient reads out ("Pressure / fullness")',
+    find: '  const feels = [quality?.plain, depth.plain, spread.plain].filter(Boolean).join(\', \');',
+    replace: '  const feels = [quality?.label, depth.label, spread.label].filter(Boolean).join(\', \');',
+  },
+  {
+    id: 'legend-repeats-both-sides',
+    file: 'js/legend.js',
+    why: 'stops merging left/right pairs, so the reader sees the same place named twice',
+    find: '  const zones = mergeSides([...new Set(markers.map(m => zoneById(m.zoneId)?.label).filter(Boolean))]);',
+    replace: '  const zones = [...new Set(markers.map(m => zoneById(m.zoneId)?.label).filter(Boolean))];',
+  },
+  {
+    id: 'guidance-severe-boundary',
+    file: 'js/guidance.js',
+    why: 'shows someone at 8 out of 10 the milder advice',
+    find: '  if (intensity >= 8) return SEVERE;',
+    replace: '  if (intensity >= 9) return SEVERE;',
+  },
+  {
+    id: 'esc-html-skips-quotes',
+    file: 'js/neorgon-dom.js',
+    why: 'the exact vendored-kit defect its own header describes: attribute-position injection',
+    find: "    .replace(/\"/g, '&quot;')\n",
+    replace: '',
+  },
+  {
+    id: 'unknown-zone-placed-anyway',
+    file: 'js/presets.js',
+    why: 'places a pattern point at a default spot instead of skipping a zone this model lacks',
+    find: '    if (!zone) continue;',
+    replace: '    if (!zone) { out.push({ ...m, p: [0, 0, 1], n: [0, 0, 1] }); continue; }',
+  },
+  {
+    id: 'marker-accepts-foreign-group',
+    file: 'js/state.js',
+    why: 'lets a marker point at a pain from another episode, which renders the wrong hue',
+    find: "  if (updates.groupId !== undefined && ep.groups.some(g => g.id === updates.groupId)) m.groupId = updates.groupId;",
+    replace: '  if (updates.groupId !== undefined) m.groupId = updates.groupId;',
+  },
+  // ── Third round: mutants the per-file re-audit reported surviving ────────
+  // Each per-file report was taken as a hypothesis, not a fact: these run
+  // against the WHOLE suite, which is the only level that matters.
+  {
+    id: 'storage-key-changed',
+    file: 'js/state.js',
+    why: 'orphans every existing diary on disk without a word to the person who wrote it',
+    find: "export const STORAGE_KEY = 'headmap-v2';",
+    replace: "export const STORAGE_KEY = 'headmap-v9';",
+  },
+  {
+    id: 'clear-points-does-nothing',
+    file: 'js/state.js',
+    why: 'the Clear all button confirms, reports success, and clears nothing',
+    find: "export function clearMarkers() {\n  const ep = activeEpisode();\n  if (!ep) return;\n  ep.markers = [];",
+    replace: "export function clearMarkers() {\n  const ep = activeEpisode();\n  if (!ep) return;",
+  },
+  {
+    id: 'camera-never-saved',
+    file: 'js/state.js',
+    why: 'the angle you left an episode at is lost every time you come back to it',
+    find: '  if (ep) ep.camera = { theta, phi, dist };',
+    replace: '  if (ep) return;',
+  },
+  {
+    id: 'new-episode-has-no-impact',
+    file: 'js/state.js',
+    why: 'a fresh episode has no impact record, so the panel writes into undefined',
+    find: '    impact: emptyImpact(),   // how often, how long, what it stops you doing',
+    replace: '',
+  },
+  {
+    id: 'import-drops-impact',
+    file: 'js/persist.js',
+    why: 'importing your own backup silently loses everything you said the pain costs you',
+    find: '    ep.impact = normalizeImpact(raw.impact);',
+    replace: '',
+  },
+  {
+    id: 'absorb-duplicates-episodes',
+    file: 'js/persist.js',
+    why: 'opening a share link then editing it duplicates every episode already in the diary',
+    find: 'stored.episodes.filter(e => !ids.has(e.id)).map(normalizeEpisode)',
+    replace: 'stored.episodes.map(normalizeEpisode)',
+  },
+  {
+    id: 'secondary-zones-worthless',
+    file: 'js/conditions.js',
+    why: 'the secondary zones stop contributing, so a pattern spread across them scores zero',
+    find: '        w = 0.4; hitZones.add(m.zoneId); hitPoints++;',
+    replace: '        w = 0.0; hitZones.add(m.zoneId); hitPoints++;',
+  },
+  {
+    id: 'every-link-is-an-explain-link',
+    file: 'js/export.js',
+    why: 'the editable link stops being editable, so your other device opens read-only',
+    find: "  const query = explain ? '?explain=1' : '';",
+    replace: "  const query = '?explain=1';",
+  },
+  {
+    id: 'impact-block-underreserved',
+    file: 'js/legend.js',
+    why: 'the impact sentences are drawn past the bottom of the exported picture',
+    find: '  return Math.round(base * s + 14 * s + lines * 19 * s);',
+    replace: '  return Math.round(base * s + 14 * s + lines * 4 * s);',
+  },
 
   // ── Added after an adversarial audit proved the suite was blind to these ──
   // Each one is a behaviour a test *claimed* to protect while asserting only
@@ -123,6 +298,13 @@ function suitePasses() {
 
 function gitDiffJs() {
   return execFileSync('git', ['diff', '--stat', '--', 'js/'], { cwd: ROOT, encoding: 'utf8' }).trim();
+}
+
+if (MUTANTS.length !== EXPECTED_MUTANTS) {
+  console.error(`This gate is meant to run ${EXPECTED_MUTANTS} mutants and has ${MUTANTS.length}. ` +
+    'A shrinking gate looks exactly like a passing one. Fix the list, or update EXPECTED_MUTANTS ' +
+    'in the same commit that changes it.');
+  process.exit(2);
 }
 
 const before = gitDiffJs();
