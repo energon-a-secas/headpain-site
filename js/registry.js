@@ -20,7 +20,12 @@ export async function loadRegistry(base = 'assets/') {
     }),
     loadImage(`${base}zones-atlas.png`)
   ]);
+  return buildRegistry(baked, atlasImage);
+}
 
+// Split from the fetch so tests can build the real registry from the real baked
+// atlas without a network or an <img>. Everything below is pure lookup-building.
+export function buildRegistry(baked, atlasImage) {
   const zones = [...baked.zones].sort((a, b) => a.index - b.index);
   const byIndex = new Map(zones.map(z => [z.index, z]));
   const byId = new Map(zones.map(z => [z.id, z]));
