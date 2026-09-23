@@ -488,6 +488,100 @@ await it('a share link opens the map the sender built, in the view they chose', 
   } finally { ctx.destroy(); restoreDiary(); }
 });
 
+// ── The marker geometry cache ───────────────────────────────────────────────
+group('marker-cache');
+
+// A DecalGeometry clips the whole head mesh, and measured about 2ms each. Before
+// the cache, every interaction rebuilt all of them: 489ms per renderAll at 60
+// points, so a click felt like half a second of nothing happening. The risk the
+// cache introduces is the opposite one, a stale body reused after something that
+// really did change its geometry, so both directions are pinned here.
+
+const withPoints = async (fn, zones = ['temple-left', 'vertex-center', 'neck-back-upper']) =>
+  withApp('', async ctx => {
+    const hm = ctx.win.__headmap;
+    for (const z of zones) hm.actions.addPointForZone(z);
+    const L = hm.head.debugMarkerLayer();
+    const ep = activeEp(ctx);
+    const keyOf = id => [...L.bodies.keys()].find(k => k.startsWith(id + '|'));
+    const geomOf = id => L.bodies.get(keyOf(id)).root.children[1].geometry;
+    await fn({ ctx, hm, L, ep, geomOf, bodyOf: id => L.bodies.get(keyOf(id)) });
+  });
+
+await it('selecting a point does not rebuild anybody geometry', async () => {
+  await withPoints(async ({ hm, ep, geomOf, L }) => {
+    const before = ep.markers.map(m => geomOf(m.id));
+    hm.actions.selectPoint(ep.markers[1].id);
+    ep.markers.forEach((m, i) => assert.ok(geomOf(m.id) === before[i],
+      `selecting rebuilt point ${i}'s geometry; that is the 489ms path back`));
+    assert.ok(L.selection, 'the selection ring did not appear');
+  });
+});
+
+await it('changing how much it hurts recolours without rebuilding', async () => {
+  await withPoints(async ({ hm, ep, geomOf, bodyOf }) => {
+    const m = ep.markers[0];
+    const geom = geomOf(m.id);
+    const colour = bodyOf(m.id).coreMat.color.getHexString();
+    hm.actions.selectPoint(m.id);
+    hm.actions.updateSelected({ intensity: 10 });
+    assert.ok(geomOf(m.id) === geom, 'intensity is a colour, not a shape: it must not rebuild');
+    assert.notEqual(bodyOf(m.id).coreMat.color.getHexString(), colour,
+      'intensity changed but the marker kept its old colour');
+  });
+});
+
+await it('changing how wide it spreads DOES rebuild, and frees the old geometry', async () => {
+  await withPoints(async ({ hm, ep, geomOf }) => {
+    const m = ep.markers[0];
+    const stale = geomOf(m.id);
+    let freed = false;
+    stale.addEventListener('dispose', () => { freed = true; });
+    hm.actions.selectPoint(m.id);
+    hm.actions.updateSelected({ spread: 'diffuse' });
+    assert.ok(geomOf(m.id) !== stale,
+      'spread decides the decal size, so a cached body here is drawn at the wrong size');
+    assert.ok(freed, 'the replaced geometry was never disposed, which leaks GPU memory per edit');
+  });
+});
+
+await it('every field the body key leaves out must be repaintable', async () => {
+  // The cache can only go wrong one way: something that changes geometry is
+  // missing from the key. Walk the fields that do, and assert each rebuilds.
+  await withPoints(async ({ hm, ep, geomOf }) => {
+    const m = ep.markers[0];
+    hm.actions.selectPoint(m.id);
+    for (const patch of [{ spread: 'pinpoint' }, { depth: 'muscle' }, { quality: 'ice-pick' }]) {
+      const stale = geomOf(m.id);
+      hm.actions.updateSelected(patch);
+      assert.ok(geomOf(m.id) !== stale,
+        `${JSON.stringify(patch)} changes what is drawn but reused a cached body`);
+    }
+  });
+});
+
+await it('deleting a point evicts its body rather than leaving it on the head', async () => {
+  await withPoints(async ({ hm, ep, L }) => {
+    assert.equal(L.bodies.size, 3);
+    hm.actions.deletePoint(ep.markers[2].id);
+    assert.equal(L.bodies.size, 2, 'a deleted point kept its geometry and still renders');
+    assert.equal(L.items.length, 2);
+    assert.equal(L.decalMats.length, L.items.reduce((n, i) => n + i.decalMats.length, 0),
+      'decalMats drifted from the live bodies, so x-ray would fade a ghost');
+  });
+});
+
+await it('a full map stays interactive, which is the whole point of the cache', async () => {
+  const zones = ['temple-left', 'temple-right', 'vertex-center', 'neck-back-upper', 'cheek-left',
+    'cheek-right', 'chin', 'ear-left', 'ear-right', 'mastoid-left', 'jaw-angle-left', 'trap-right'];
+  await withPoints(async ({ hm, ep }) => {
+    const t0 = performance.now();
+    for (let i = 0; i < 10; i++) hm.actions.selectPoint(ep.markers[i % ep.markers.length].id);
+    const per = (performance.now() - t0) / 10;
+    assert.ok(per < 120, `selecting a point took ${per.toFixed(0)}ms; the cache is not being hit`);
+  }, zones);
+});
+
 // ── Comparing two patterns ──────────────────────────────────────────────────
 group('compare');
 

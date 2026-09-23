@@ -262,6 +262,9 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
   api.getCanvas = () => renderer.domElement;
   api.debugPick = pickAt; // exposed for automated tests
   api.debugScene = () => ({ scene, camera, headMesh, lut });
+  // The marker layer caches geometry, and a cache that silently returns a stale
+  // body is invisible from outside. tests/browser.html asserts on this.
+  api.debugMarkerLayer = () => markerLayer;
   api.renderNow = () => renderer.render(scene, camera);
   api.snapshot = () => {
     renderer.render(scene, camera);

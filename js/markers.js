@@ -54,6 +54,7 @@ function ringTexture() {
 const SPIKY_QUALITIES = new Set(['electric', 'stabbing', 'ice-pick', 'sharp']);
 const DEFAULT_STYLE = { color: GROUP_COLORS[0], pattern: 'solid' };
 const XRAY_FADE = { halo: 0.2, ring: 0.2, core: 0.5, sel: 0.4 };
+const SELECTION_COLOR = new THREE.Color(0x10b981);
 const _zAxis = new THREE.Vector3(0, 0, 1);
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
@@ -73,7 +74,15 @@ export class MarkerLayer {
     this.spikeGeom = new THREE.ConeGeometry(0.06, 1, 12, 1, true);
     this.spikeGeom.rotateX(Math.PI);      // apex now points -y
     this.spikeGeom.translate(0, -0.5, 0); // base at origin (skin), tip extends inward
-    this.items = []; // { root, disposables, pulseMat, phase, dim }
+    this.items = []; // ordered view of the cache, for update() and clear()
+    // Marker bodies, keyed by everything that decides their geometry. A
+    // DecalGeometry clips the whole head mesh per decal, which measured about
+    // 2ms each: rebuilding all of them on every selection cost 484ms at 60
+    // points, so a click felt like half a second of nothing happening. Nothing
+    // about selecting, hovering or isolating changes geometry, only colour and
+    // opacity, so a body survives all three.
+    this.bodies = new Map();
+    this.selection = null; // { mesh, disposables } — one decal, rebuilt on its own
     this.decalMats = []; // { mat, base, role } — faded in x-ray so deep columns read clearly
     this.xray = false;
   }
@@ -90,15 +99,26 @@ export class MarkerLayer {
   }
 
   clear() {
-    for (const item of this.items) {
-      this.group.remove(item.root);
-      item.disposables.forEach(d => d.dispose());
-    }
+    for (const item of this.bodies.values()) this.disposeBody(item);
+    this.bodies.clear();
+    this.clearSelection();
     this.items = [];
     this.decalMats = [];
   }
 
-  addDecal(marker, texture, color, size, opacity, role = 'core') {
+  disposeBody(item) {
+    this.group.remove(item.root);
+    item.disposables.forEach(d => d.dispose());
+  }
+
+  clearSelection() {
+    if (!this.selection) return;
+    this.group.remove(this.selection.mesh);
+    this.selection.disposables.forEach(d => d.dispose());
+    this.selection = null;
+  }
+
+  addDecal(marker, texture, color, size, opacity, role = 'core', collect = null) {
     const p = new THREE.Vector3(...marker.p);
     const n = new THREE.Vector3(...marker.n);
     _q.setFromUnitVectors(_zAxis, n);
@@ -113,7 +133,7 @@ export class MarkerLayer {
       polygonOffset: true,
       polygonOffsetFactor: -2
     });
-    this.decalMats.push({ mat, base: opacity, role });
+    (collect || this.decalMats).push({ mat, base: opacity, role });
     const mesh = new THREE.Mesh(geom, mat);
     return { mesh, disposables: [geom, mat] };
   }
@@ -137,57 +157,134 @@ export class MarkerLayer {
     return { mesh, disposables: [mat] };
   }
 
+  // Everything that decides a body's geometry. Anything NOT in here must be
+  // adjustable by repaint() alone, or a stale body will be reused: that is the
+  // one way this cache can go wrong, so add to the key rather than to repaint
+  // when you are unsure.
+  static bodyKey(marker, style) {
+    return [
+      marker.id,
+      marker.p.join(','), marker.n.join(','),
+      marker.spread, marker.depth, marker.quality,
+      style.pattern,
+    ].join('|');
+  }
+
   sync(markers, selectedId, groupStyle = {}, isolateGroupId = null) {
-    this.clear();
     const capped = markers.slice(0, MAX_MARKERS);
+    const live = new Map();
+
     for (const marker of capped) {
-      const root = new THREE.Group();
-      const disposables = [];
       const style = groupStyle[marker.groupId] || DEFAULT_STYLE;
-      const color = new THREE.Color(paint(style.color, marker.intensity));
-      const dim = isolateGroupId && marker.groupId !== isolateGroupId ? DIM_FACTOR : 1;
-      const spreadRadius = spreadById(marker.spread).radius;
-      const coreSize = Math.max(0.16, spreadRadius * 0.7);
-      const haloSize = spreadRadius * 1.6;
-      const baseOpacity = (0.45 + marker.intensity * 0.05) * dim;
-
-      // halo (all markers)
-      const halo = this.addDecal(marker, this.tex.halo, color, haloSize, (0.3 + marker.intensity * 0.04) * dim, 'halo');
-      root.add(halo.mesh); disposables.push(...halo.disposables);
-
-      // core: the pain's own glyph, with a jagged rim for stabbing qualities
-      const coreTex = this.glyph(style.pattern, SPIKY_QUALITIES.has(marker.quality));
-      const core = this.addDecal(marker, coreTex, color, coreSize, baseOpacity);
-      root.add(core.mesh); disposables.push(...core.disposables);
-
-      let pulseMat = null;
-      if (marker.depth === 'muscle') {
-        const ring = this.addDecal(marker, this.tex.ring, color, coreSize * 1.5, 0.5 * dim, 'ring');
-        root.add(ring.mesh); disposables.push(...ring.disposables);
-      }
-      if (marker.quality === 'ice-pick') {
-        // The nail: a long spike driven into the skull, the star of x-ray view.
-        const spike = this.addColumn(marker, color, 1.15, 0.9 * dim, this.spikeGeom);
-        root.add(spike.mesh); disposables.push(...spike.disposables);
-      } else if (marker.depth === 'deep-pressure') {
-        const col = this.addColumn(marker, color, 0.35, 0.8 * dim);
-        root.add(col.mesh); disposables.push(...col.disposables);
-      } else if (marker.depth === 'inside-head') {
-        const col = this.addColumn(marker, color, 0.5, 0.85 * dim);
-        root.add(col.mesh); disposables.push(...col.disposables);
-        pulseMat = core.mesh.material;
-      }
-      if (marker.quality === 'throbbing') pulseMat = core.mesh.material;
-
-      // selection ring
-      if (marker.id === selectedId) {
-        const sel = this.addDecal(marker, this.tex.ring, new THREE.Color(0x10b981), coreSize * 1.9, 0.95, 'sel');
-        root.add(sel.mesh); disposables.push(...sel.disposables);
-      }
-
-      this.group.add(root);
-      this.items.push({ root, disposables, pulseMat, phase: (marker.p[0] * 7 + marker.p[1] * 13) % (Math.PI * 2), dim });
+      const key = MarkerLayer.bodyKey(marker, style);
+      const body = this.bodies.get(key) || this.buildBody(marker, style);
+      this.repaint(body, marker, style, isolateGroupId);
+      live.set(key, body);
     }
+
+    for (const [key, body] of this.bodies) {
+      if (live.get(key) !== body) this.disposeBody(body);
+    }
+    this.bodies = live;
+    this.items = [...live.values()];
+    this.decalMats = this.items.flatMap(i => i.decalMats);
+
+    this.syncSelection(capped, selectedId);
+  }
+
+  // The geometry, built once. Colours here are placeholders: repaint() sets the
+  // real ones on this same call, and on every later one.
+  buildBody(marker, style) {
+    const root = new THREE.Group();
+    const disposables = [];
+    const decalMats = [];
+    const white = new THREE.Color(0xffffff);
+    const spreadRadius = spreadById(marker.spread).radius;
+    const coreSize = Math.max(0.16, spreadRadius * 0.7);
+    const haloSize = spreadRadius * 1.6;
+
+    const halo = this.addDecal(marker, this.tex.halo, white, haloSize, 1, 'halo', decalMats);
+    root.add(halo.mesh); disposables.push(...halo.disposables);
+
+    // core: the pain's own glyph, with a jagged rim for stabbing qualities
+    const coreTex = this.glyph(style.pattern, SPIKY_QUALITIES.has(marker.quality));
+    const core = this.addDecal(marker, coreTex, white, coreSize, 1, 'core', decalMats);
+    root.add(core.mesh); disposables.push(...core.disposables);
+
+    let ring = null;
+    if (marker.depth === 'muscle') {
+      ring = this.addDecal(marker, this.tex.ring, white, coreSize * 1.5, 1, 'ring', decalMats);
+      root.add(ring.mesh); disposables.push(...ring.disposables);
+    }
+
+    let column = null;
+    if (marker.quality === 'ice-pick') {
+      // The nail: a long spike driven into the skull, the star of x-ray view.
+      column = this.addColumn(marker, white, 1.15, 1, this.spikeGeom);
+    } else if (marker.depth === 'deep-pressure') {
+      column = this.addColumn(marker, white, 0.35, 1);
+    } else if (marker.depth === 'inside-head') {
+      column = this.addColumn(marker, white, 0.5, 1);
+    }
+    if (column) { root.add(column.mesh); disposables.push(...column.disposables); }
+
+    const pulses = marker.depth === 'inside-head' || marker.quality === 'throbbing';
+
+    this.group.add(root);
+    return {
+      root, disposables, decalMats,
+      coreSize,
+      haloMat: halo.mesh.material,
+      coreMat: core.mesh.material,
+      ringMat: ring?.mesh.material || null,
+      columnMat: column?.mesh.material || null,
+      pulseMat: pulses ? core.mesh.material : null,
+      phase: (marker.p[0] * 7 + marker.p[1] * 13) % (Math.PI * 2),
+      dim: 1,
+    };
+  }
+
+  // Colour, intensity and isolation, none of which touch geometry.
+  repaint(body, marker, style, isolateGroupId) {
+    const color = new THREE.Color(paint(style.color, marker.intensity));
+    const dim = isolateGroupId && marker.groupId !== isolateGroupId ? DIM_FACTOR : 1;
+    body.dim = dim;
+
+    const set = (rec, mat, base) => {
+      if (!mat) return;
+      mat.color.copy(color);
+      rec.base = base;
+      mat.opacity = this.xray ? base * (XRAY_FADE[rec.role] ?? 1) : base;
+    };
+    const rec = role => body.decalMats.find(d => d.role === role);
+
+    set(rec('halo'), body.haloMat, (0.3 + marker.intensity * 0.04) * dim);
+    set(rec('core'), body.coreMat, (0.45 + marker.intensity * 0.05) * dim);
+    if (body.ringMat) set(rec('ring'), body.ringMat, 0.5 * dim);
+    if (body.columnMat) {
+      body.columnMat.color.copy(color);
+      body.columnMat.opacity = (marker.quality === 'ice-pick' ? 0.9 : marker.depth === 'deep-pressure' ? 0.8 : 0.85) * dim;
+    }
+  }
+
+  // One decal, and only this one is rebuilt when the selection moves.
+  syncSelection(markers, selectedId) {
+    const marker = markers.find(m => m.id === selectedId) || null;
+    // Rebuilt only when the selection actually moves, and it is one decal
+    // rather than all of them.
+    if (this.selectedId === selectedId && (!!this.selection === !!marker)) {
+      if (this.selection) this.decalMats.push(this.selection.rec);
+      return;
+    }
+    this.clearSelection();
+    this.selectedId = selectedId;
+    if (!marker) return;
+    const coreSize = Math.max(0.16, spreadById(marker.spread).radius * 0.7);
+    const mats = [];
+    const sel = this.addDecal(marker, this.tex.ring, SELECTION_COLOR, coreSize * 1.9, 0.95, 'sel', mats);
+    this.group.add(sel.mesh);
+    this.selection = { mesh: sel.mesh, disposables: sel.disposables, rec: mats[0] };
+    this.decalMats.push(mats[0]);
   }
 
   // Returns true while any marker is animating (keeps render-on-demand alive).
