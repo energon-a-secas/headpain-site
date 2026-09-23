@@ -28,11 +28,11 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 
 | Module | Lines | Owns |
 |---|---:|---|
-| `js/events.js` | 476 | `initApp`, every action the UI calls |
+| `js/events.js` | 480 | `initApp`, every action the UI calls |
 | `js/conditions.js` | 379 | `CONDITIONS`, `scoreConditions`, the disclaimers |
-| `js/state.js` | 343 | the live model: `state`, episodes, pains, markers, impact |
+| `js/state.js` | 348 | the live model: `state`, episodes, pains, markers, impact |
 | `js/head3d.js` | 316 | `createHead3D`: renderer, camera, picking, zone tint |
-| `js/persist.js` | 271 | localStorage, JSON files, share-link payloads |
+| `js/persist.js` | 303 | localStorage, JSON files, share-link payloads |
 | `js/legend.js` | 269 | `buildLegend`, `legendHtml`, `drawLegendPng` |
 | `js/embed.js` | 216 | the embed's boot, URL contract and postMessage API |
 | `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
@@ -45,7 +45,7 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/panel-conditions.js` | 142 | `renderMatches`, `renderRedFlags`, `renderLibrary` |
 | `js/groups.js` | 137 | `GROUP_COLORS`, `paint`, `markerColor`, `markerPattern` |
 | `js/embed-builder.js` | 104 | the builder form and its postMessage console |
-| `js/presets.js` | 115 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
+| `js/presets.js` | 114 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
 | `js/panel-episodes.js` | 88 | `renderEpisodes` |
 | `js/picking.js` | 85 | `buildLut`, `nearestPatch`, `pickZone` |
 | `js/panel-explain.js` | 110 | `renderExplain` |
@@ -134,8 +134,16 @@ against a stub.
   `InvalidCharacterError` out of the click handler and leave "Copy share link" a
   dead button with no toast. iOS types that apostrophe by default. The decoder
   falls back to the raw binary string so links minted before the fix still open.
-- **Share links truncate at `URL_MARKER_CAP` (12).** `shareWouldTruncate()` exists
-  so the toast can say so. Do not raise the cap without measuring the URL length.
+- **Share links are budgeted by length, not by point count.** `URL_CHAR_BUDGET`
+  is 2,000 characters and `serializeForUrl` drops points from the end until the
+  link fits, always keeping one. The two units do not correlate: a point costs
+  about 73 characters bare and about 129 with a typical note, so the old flat
+  twelve-point cap produced links from 1,055 to 9,055 characters depending only
+  on how much somebody typed. The payload rides in the fragment, which browsers
+  never send to a server, so nginx-class limits do not apply (a 7,928-character
+  link carrying 60 points navigates and decodes fine); 2,000 is about where QR
+  encoders stop. `shareWouldTruncate(zoneIndexOf)` asks the serializer rather
+  than counting off a constant, so the toast cannot disagree with the link.
 - **Any episode-shaped object needs `camera`.** `plainEpisode()` in `presets.js`
   omitted it once, and the boot threw inside `head.ready.then`, which the catch
   reported to the user as a browser that cannot do 3D.
@@ -174,9 +182,14 @@ against a stub.
   result straight to `safeJsonParse` and fall through to the local diary. Do not
   "simplify" the try/catch away: the throw used to escape `boot()` and cost the
   reader their own diary along with the link.
-- **Anything handed out as a marker position must be a copy.** `WHOLE_HEAD_SPOT`
-  in `presets.js` is a module constant; handing out its arrays by reference made
-  every whole-head marker in every episode share one pair.
+- **`defaultMarker` copies the arrays it is handed, and that is the guarantee.**
+  Storing `partial.p` by reference made every whole-head point in every episode
+  share one array with the `WHOLE_HEAD_SPOT` constant: moving one moved all of
+  them and corrupted the constant for the rest of the session. Two call sites
+  were fixed individually before the penny dropped (`presets.js` on 2026-09-05,
+  `events.js` missed until 2026-09-23), which is exactly how a third would have
+  reintroduced it. Callers may still copy, and `materializeSpots` does because
+  fresh arrays are its own exported contract, but no caller has to.
 
 ## Do not touch
 
