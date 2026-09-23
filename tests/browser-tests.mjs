@@ -571,6 +571,23 @@ await it('deleting a point evicts its body rather than leaving it on the head', 
   });
 });
 
+await it('x-ray stays faded across a resync, now that repaint sets opacity too', async () => {
+  // The subtle one. setXray() walks the material records; repaint() also writes
+  // opacity on every sync. If repaint ignored this.xray, turning x-ray on and
+  // then clicking anything would silently snap the skin decals back to full.
+  await withPoints(async ({ hm, ep, L }) => {
+    const opacities = () => L.decalMats.filter(d => d.role !== 'sel').map(d => d.mat.opacity);
+    const normal = opacities();
+    hm.actions.toggleXray();
+    const faded = opacities();
+    assert.ok(faded.every((o, i) => o < normal[i]), 'x-ray did not fade the surface decals');
+    hm.actions.selectPoint(ep.markers[0].id);
+    assert.deepEqual(opacities(), faded, 'a resync under x-ray put the decals back to full');
+    hm.actions.toggleXray();
+    assert.deepEqual(opacities(), normal, 'leaving x-ray did not restore the decals');
+  });
+});
+
 await it('a full map stays interactive, which is the whole point of the cache', async () => {
   const zones = ['temple-left', 'temple-right', 'vertex-center', 'neck-back-upper', 'cheek-left',
     'cheek-right', 'chin', 'ear-left', 'ear-right', 'mastoid-left', 'jaw-angle-left', 'trap-right'];

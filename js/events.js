@@ -411,7 +411,10 @@ export function initApp(ctx) {
   });
 
   window.addEventListener('keydown', e => {
-    if (e.target.matches('input, textarea, select')) return;
+    // A synthetic keydown dispatched at window (which is what a test does) has
+    // no matches(), and the throw used to escape into the console looking like
+    // an app bug. Narrowing is cheaper than explaining that every time.
+    if (e.target instanceof Element && e.target.matches('input, textarea, select')) return;
     switch (e.key.toLowerCase()) {
       case 'x': ctx.actions.toggleXray(); break;
       case 'r': ctx.actions.resetView(); break;

@@ -35,7 +35,24 @@ export const assert = {
   includes(hay, needle, msg) {
     if (!String(hay).includes(needle)) throw new Error(msg || `expected to find ${JSON.stringify(needle)}`);
   },
+  // Structural, not JSON.stringify: stringify agrees on key order and silently
+  // drops undefined, so it calls two different objects equal.
+  deepEqual(a, b, msg) {
+    if (!deepish(a, b)) {
+      throw new Error(msg || `expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+    }
+  },
 };
+
+function deepish(a, b) {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every(k => Object.prototype.hasOwnProperty.call(b, k) && deepish(a[k], b[k]));
+}
 
 export const wait = ms => new Promise(r => setTimeout(r, ms));
 
