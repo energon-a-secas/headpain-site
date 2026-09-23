@@ -24,3 +24,6 @@ __pycache__/
 *.py[cod]
 skills-archived/
 *.log
+
+# Agent worktrees: transient copies of this repo, never project content.
+.claude/worktrees/
