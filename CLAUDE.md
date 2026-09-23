@@ -28,15 +28,15 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 
 | Module | Lines | Owns |
 |---|---:|---|
-| `js/events.js` | 473 | `initApp`, every action the UI calls |
+| `js/events.js` | 476 | `initApp`, every action the UI calls |
 | `js/conditions.js` | 379 | `CONDITIONS`, `scoreConditions`, the disclaimers |
 | `js/state.js` | 343 | the live model: `state`, episodes, pains, markers, impact |
-| `js/head3d.js` | 313 | `createHead3D`: renderer, camera, picking, zone tint |
+| `js/head3d.js` | 316 | `createHead3D`: renderer, camera, picking, zone tint |
 | `js/persist.js` | 271 | localStorage, JSON files, share-link payloads |
-| `js/legend.js` | 255 | `buildLegend`, `legendHtml`, `drawLegendPng` |
+| `js/legend.js` | 269 | `buildLegend`, `legendHtml`, `drawLegendPng` |
 | `js/embed.js` | 216 | the embed's boot, URL contract and postMessage API |
 | `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
-| `js/markers.js` | 213 | `MarkerLayer`: decals, depth geometry, pattern textures |
+| `js/markers.js` | 310 | `MarkerLayer`: decals, depth geometry, pattern textures |
 | `js/zones.js` | 202 | `ZONES`, `DEPTHS`, `QUALITIES`, `SPREADS`, intensity bands |
 | `js/patterns.js` | 188 | `PATTERNS`, `drawPattern` (canvas), `patternSvg` (DOM) |
 | `js/impact.js` | 172 | the impact vocabulary and `impactSentences` |
@@ -139,6 +139,18 @@ against a stub.
 - **Any episode-shaped object needs `camera`.** `plainEpisode()` in `presets.js`
   omitted it once, and the boot threw inside `head.ready.then`, which the catch
   reported to the user as a browser that cannot do 3D.
+- **Marker geometry is cached, and the key is the whole contract.**
+  `MarkerLayer.bodyKey()` lists exactly the fields that decide a marker's shape
+  (position, normal, spread, depth, quality, glyph). Anything not in that key must
+  be adjustable by `repaint()` alone. Add a field that changes geometry and forget
+  the key, and the head draws a stale body with nothing to say so. This is not a
+  micro-optimisation: a DecalGeometry clips the whole head mesh, about 2ms each,
+  and rebuilding all of them per interaction cost 489ms at 60 points. The
+  `marker-cache` group in `tests/browser.html` pins both directions, including a
+  test that walks spread, depth and quality and fails if any reuses a body.
+- **`repaint()` has to respect `this.xray`.** It writes opacity on every sync, so
+  if it ignored the flag, turning x-ray on and then clicking anything would snap
+  the surface decals back to full.
 - **Panels re-render on every `renderAll`.** A listener bound to a container that
   survives re-render (rather than to the freshly written innerHTML) stacks up one
   per past render. `panel-impact.js` guards with `el.dataset.wired`; copy that
