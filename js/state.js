@@ -20,8 +20,13 @@ export function defaultMarker(partial = {}) {
   return {
     id: uid('m'),
     zoneId: partial.zoneId || null,       // derived at placement; informational
-    p: partial.p || [0, 0, 1],            // head-local position
-    n: partial.n || [0, 0, 1],            // head-local surface normal
+    // Copied, never adopted. Callers hand in zone anchors and module constants,
+    // and storing those by reference made every whole-head point in every episode
+    // share one array with WHOLE_HEAD_SPOT: moving one moved all of them and
+    // corrupted the constant for the rest of the session. Two call sites were
+    // fixed individually before this; a third would have reintroduced it.
+    p: partial.p ? [...partial.p] : [0, 0, 1],   // head-local position
+    n: partial.n ? [...partial.n] : [0, 0, 1],   // head-local surface normal
     intensity: partial.intensity ?? 5,
     depth: partial.depth || 'surface',
     quality: partial.quality || null,

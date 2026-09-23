@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { marker } from './fixtures.mjs';
 import {
-  uid, state, activeEpisode, createEpisode, loadEpisode, deleteEpisode, ensureActivePain,
+  uid, state, defaultMarker, activeEpisode, createEpisode, loadEpisode, deleteEpisode, ensureActivePain,
   addMarker, updateMarker, removeMarker, clearMarkers, selectMarker, selectedMarker, replaceMarkers,
   adoptOrphans, ORPHAN_PAIN_NAME,
   addGroup, renameGroup, removeGroup, setGroupStyle, resetMap,
@@ -761,6 +761,27 @@ test('Clear all actually clears, rather than confirming and doing nothing', () =
   assert.equal(activeEpisode().markers.length, 0, 'the points survived Clear all');
   assert.equal(state.selectedMarkerId, null, 'a deleted point is still selected, so the editor reads a ghost');
   assert.equal(activeEpisode().groups.length, 1, 'clearing the points must not delete the pains');
+});
+
+test('defaultMarker copies the arrays it is handed, so no caller can alias a marker position', () => {
+  // Two call sites were fixed individually for this, and a third would have
+  // reintroduced it: js/events.js was still handing out the WHOLE_HEAD_SPOT
+  // constant when js/presets.js had already been fixed. Moving one whole-head
+  // point moved every other one in every episode, and corrupted the constant for
+  // the rest of the session. The guarantee belongs at the one door every marker
+  // comes through.
+  const shared = [1, 2, 3];
+  const a = defaultMarker({ p: shared, n: shared });
+  const b = defaultMarker({ p: shared, n: shared });
+
+  assert.notEqual(a.p, shared, 'the marker adopted the caller array instead of copying it');
+  assert.notEqual(a.p, b.p, 'two markers built from one array share it');
+  assert.notEqual(a.p, a.n, 'position and normal are the same array');
+  assert.deepEqual(a.p, [1, 2, 3], 'the copy lost the values');
+
+  a.p[1] = 99;
+  assert.deepEqual(shared, [1, 2, 3], 'editing a marker wrote back into the caller array');
+  assert.deepEqual(b.p, [1, 2, 3], 'editing one marker moved another');
 });
 
 test('a new episode arrives with an impact record, so the panel has somewhere to write', () => {

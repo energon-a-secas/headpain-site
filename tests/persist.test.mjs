@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { resetShim } from './shim.mjs';
 import { registry } from './fixtures.mjs';
 import {
-  URL_MARKER_CAP, shareWouldTruncate, serializeForUrl, episodeFromUrlPayload,
+  URL_CHAR_BUDGET, shareWouldTruncate, serializeForUrl, episodeFromUrlPayload,
   loadFromUrlPayload, loadLearnEpisode, absorbShared, episodeToJson, allToJson,
   importJson, saveToStorage, loadFromStorage
 } from '../js/persist.js';
@@ -159,25 +159,55 @@ test('base64UrlEncode writes real base64url, and decoding it returns the exact b
 // Share links: the cap
 // ---------------------------------------------------------------------------
 
-test('serializeForUrl stops at twelve markers, keeping the first ones in order', () => {
-  // Twelve is stated once, here, as what the link actually carried: raising the
-  // cap lengthens every share link, and a URL that a chat app or an email
-  // client truncates is a map that silently fails to open. Change it
-  // deliberately, not by drift. (Asserting URL_MARKER_CAP === 12 as well would
-  // only restate the source; the fixture is sized off the constant so the test
-  // stays three points over whatever the cap is.)
+test('serializeForUrl fills the character budget, keeping the first points in order', () => {
+  // The limit is a length, not a point count, because the two do not correlate:
+  // measured on this model a point costs about 73 characters bare and about 129
+  // with a typical note. What matters is that the link stays short enough to
+  // survive whatever carries it, and that the points it keeps are the first ones.
   const g = defaultGroup({ name: 'Pain' }, []);
-  const markers = Array.from({ length: URL_MARKER_CAP + 3 }, (_, i) =>
-    defaultMarker({ zoneId: 'temple-left', groupId: g.id, note: `p${i}` }));
+  // Real coordinates, not defaultMarker's [0, 0, 1]: a picked point carries
+  // three decimals per axis, which is most of a marker's width in the link.
+  const markers = Array.from({ length: 40 }, (_, i) =>
+    defaultMarker({ zoneId: 'temple-left', groupId: g.id, note: `p${i}`,
+      p: [0.123, -0.654, 0.987], n: [0.111, 0.222, 0.333] }));
   install(defaultEpisode('Many', markers, [g]));
 
   const payload = serializeForUrl(zoneIndexOf);
-  assert.equal(payload.m.length, 12, '15 points went in; the link must carry 12');
-  assert.deepEqual(payload.m.map(r => r[11]),
-    ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11'],
-    'the link kept the wrong twelve, or reordered them');
-  assert.equal(shareWouldTruncate(), markers.length - payload.m.length,
-    'the warning and the serializer must count off the same cap, or the number the user is shown is a lie');
+  assert.ok(payload.m.length > 1, 'the link carried almost nothing');
+  assert.ok(payload.m.length < markers.length, 'a 40-point map cannot fit the budget; something stopped trimming');
+  assert.deepEqual(payload.m.map(r => r[11]), markers.slice(0, payload.m.length).map((_, i) => `p${i}`),
+    'the link kept the wrong points, or reordered them');
+  assert.equal(shareWouldTruncate(zoneIndexOf), markers.length - payload.m.length,
+    'the warning and the serializer must agree, or the number the user is shown is a lie');
+});
+
+test('a sparse map travels whole where a note-heavy one does not, which the old flat cap could not express', () => {
+  const g = defaultGroup({ name: 'Pain' }, []);
+  const build = note => {
+    install(defaultEpisode('N', Array.from({ length: 30 }, () =>
+      defaultMarker({ zoneId: 'temple-left', groupId: g.id, note,
+        p: [0.123, -0.654, 0.987], n: [0.111, 0.222, 0.333] })), [g]));
+    return serializeForUrl(zoneIndexOf).m.length;
+  };
+  const bare = build('');
+  const wordy = build('Started after lunch, worse bending forward, eased lying down');
+  assert.ok(bare > 12, `a map with no notes carries only ${bare} points, where the point of the budget is to beat the old flat 12`);
+  assert.ok(wordy < bare, 'notes cost characters, so a wordy map must carry fewer points, not the same number');
+});
+
+test('one point always survives, however much was typed into it', () => {
+  // The editor caps a note at 500 characters and one of those fits the budget on
+  // its own, so this guard is only reachable through a hand-edited JSON import:
+  // updateMarker slices, defaultMarker does not. Without it the trimmer would
+  // empty the link, which is worse than one slightly over budget.
+  const g = defaultGroup({ name: 'Pain' }, []);
+  install(defaultEpisode('Wall of text', [
+    defaultMarker({ zoneId: 'temple-left', groupId: g.id, note: 'x'.repeat(4000) }),
+    defaultMarker({ zoneId: 'vertex-center', groupId: g.id, note: 'y'.repeat(4000) }),
+  ], [g]));
+  const payload = serializeForUrl(zoneIndexOf);
+  assert.equal(payload.m.length, 1, 'the trimmer must stop at one point rather than emptying the link');
+  assert.equal(payload.m[0][11].length, 4000, 'the surviving point lost its note');
 });
 
 test('with no episode open there is nothing to serialize, and serializeForUrl says so rather than throwing', () => {
@@ -190,20 +220,27 @@ test('with no episode open there is nothing to serialize, and serializeForUrl sa
 test('shareWouldTruncate names exactly how many points a link would drop', () => {
   const g = defaultGroup({ name: 'Pain' }, []);
   const withMarkers = n => install(defaultEpisode('N', Array.from({ length: n }, () =>
-    defaultMarker({ zoneId: 'temple-left', groupId: g.id })), [g]));
+    defaultMarker({ zoneId: 'temple-left', groupId: g.id,
+      p: [0.123, -0.654, 0.987], n: [0.111, 0.222, 0.333] })), [g]));
 
-  withMarkers(15);
-  assert.equal(shareWouldTruncate(), 3, 'the warning must state the real number left out');
-  withMarkers(13);
-  assert.equal(shareWouldTruncate(), 1, 'one over the cap is still worth warning about');
-  withMarkers(12);
-  assert.equal(shareWouldTruncate(), 0, 'exactly at the cap nothing is lost, so no warning');
+  // Derived from the serializer rather than from a remembered number, so the two
+  // can never disagree about what the user is told.
+  const dropped = n => {
+    withMarkers(n);
+    return { warned: shareWouldTruncate(zoneIndexOf), real: n - serializeForUrl(zoneIndexOf).m.length };
+  };
+  for (const n of [60, 40, 25, 5]) {
+    const d = dropped(n);
+    assert.equal(d.warned, d.real, `with ${n} points the toast would claim ${d.warned} were dropped and ${d.real} were`);
+  }
+  withMarkers(5);
+  assert.equal(shareWouldTruncate(zoneIndexOf), 0, 'a small map loses nothing, so there is nothing to warn about');
   withMarkers(1);
-  assert.equal(shareWouldTruncate(), 0);
+  assert.equal(shareWouldTruncate(zoneIndexOf), 0);
 
   state.episodes = [];
   state.activeEpisodeId = null;
-  assert.equal(shareWouldTruncate(), 0, 'with no episode at all it must answer 0, not throw');
+  assert.equal(shareWouldTruncate(zoneIndexOf), 0, 'with no episode at all it must answer 0, not throw');
 });
 
 // ---------------------------------------------------------------------------

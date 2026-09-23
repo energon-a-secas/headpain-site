@@ -10,7 +10,7 @@ import {
 } from './state.js';
 import {
   absorbShared, saveToStorage, importJson, loadLearnEpisode,
-  shareWouldTruncate, URL_MARKER_CAP
+  shareWouldTruncate
 } from './persist.js';
 import { CONDITIONS, presetMarkers } from './conditions.js';
 import { DEMOS } from './demos.js';
@@ -111,7 +111,11 @@ export function initApp(ctx) {
     addPointForZone(zoneId) {
       const zone = registry.zoneById(zoneId);
       if (!zone) return;
-      const spot = zone.virtual ? WHOLE_HEAD_SPOT : { p: [...zone.anchor], n: [...zone.normal] };
+      // Copied here as well as in defaultMarker: handing out the module constant
+      // is what went wrong, and the copy costs nothing next to placing a point.
+      const spot = zone.virtual
+        ? { p: [...WHOLE_HEAD_SPOT.p], n: [...WHOLE_HEAD_SPOT.n] }
+        : { p: [...zone.anchor], n: [...zone.normal] };
       mutate(() => {
         ensurePainForPlacement();
         addMarker({
@@ -312,11 +316,11 @@ export function initApp(ctx) {
       if (!url) return;
       // A link holds a fixed number of points; saying so beats handing someone
       // a URL that quietly dropped half the map.
-      const dropped = shareWouldTruncate();
+      const dropped = shareWouldTruncate(registry.zoneIndexOf);
       const what = opts.explain ? 'Explain link copied' : 'Share link copied';
       navigator.clipboard.writeText(url)
         .then(() => toast(dropped
-          ? `${what}, but it carries only the first ${URL_MARKER_CAP} points (${dropped} left out). Export JSON for the full map.`
+          ? `${what}, but ${dropped} point${dropped === 1 ? '' : 's'} would not fit in the link. Export JSON for the full map.`
           : opts.explain
             ? 'Explain link copied: it opens as a read-only page with the legend'
             : 'Share link copied: the map travels inside the URL'))

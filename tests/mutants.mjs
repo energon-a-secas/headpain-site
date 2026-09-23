@@ -91,9 +91,9 @@ const MUTANTS = [
   {
     id: 'share-link-does-not-truncate',
     file: 'js/persist.js',
-    why: 'drops the marker cap, so a long map produces an oversized URL with no warning',
-    find: 'ep.markers.slice(0, URL_MARKER_CAP)',
-    replace: 'ep.markers',
+    why: 'drops the length budget, so a long map produces an oversized URL with no warning',
+    find: '  while (payload.m.length > 1 && !fitsBudget(payload)) payload.m.pop();',
+    replace: '',
   },
   {
     id: 'impact-bitmask-off-by-one',

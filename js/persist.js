@@ -16,13 +16,39 @@ import {
 } from './state.js';
 
 // Share links carry the whole map in the URL, so they have to stop somewhere.
-// Exported so the UI can warn *before* someone hands out a link that quietly
-// dropped half their points.
-export const URL_MARKER_CAP = 12;
+// The limit is a character budget rather than a point count, because the two do
+// not correlate: measured on this model a marker costs about 73 characters bare
+// and about 129 with a typical note, so a flat twelve-point cap produced links
+// anywhere from 1,055 characters (wasting almost all the headroom) to 9,055
+// (well past comfortable) depending only on how much somebody typed.
+//
+// The payload rides in the fragment, which browsers never send to a server, so
+// the 8 KB request-line limits of nginx and friends do not apply: a 7,928-char
+// link carrying 60 points was verified to navigate and decode intact. What
+// actually binds is the smallest thing people put one of these links into, and
+// that is a QR code: roughly 2,300 alphanumeric characters at medium error
+// correction, before the modules get too dense to scan from a phone.
+export const URL_CHAR_BUDGET = 2000;
 
-export function shareWouldTruncate() {
+// origin + path + '#m=' for the longest host this ships on, plus slack.
+const LINK_OVERHEAD = 64;
+
+// base64 is 4 characters per 3 bytes, and base64UrlEncode strips the padding.
+// Measuring bytes rather than characters matters: the encoder goes through
+// TextEncoder, so one emoji in a note is four bytes, not one.
+const encodedLength = json => Math.ceil(new TextEncoder().encode(json).length * 4 / 3);
+
+function fitsBudget(payload) {
+  return encodedLength(JSON.stringify(payload)) + LINK_OVERHEAD <= URL_CHAR_BUDGET;
+}
+
+// How many points a link would leave behind. Answers from the same fitting the
+// encoder uses, so the warning can never disagree with the link.
+export function shareWouldTruncate(zoneIndexOf) {
   const ep = activeEpisode();
-  return ep ? Math.max(0, ep.markers.length - URL_MARKER_CAP) : 0;
+  if (!ep) return 0;
+  const payload = serializeForUrl(zoneIndexOf);
+  return payload ? Math.max(0, ep.markers.length - payload.m.length) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,13 +65,13 @@ export function serializeForUrl(zoneIndexOf) {
   const ep = activeEpisode();
   if (!ep) return null;
   const groupIndex = new Map(ep.groups.map((g, i) => [g.id, i]));
-  return {
+  const payload = {
     v: 2,
     t: ep.title,
     c: [round3(ep.camera.theta), round3(ep.camera.phi), round3(ep.camera.dist)],
     i: packImpact(ep.impact),
     g: ep.groups.map(g => [g.name, colorIndexOf(g.color), g.conditionId || '', patternIndexOf(g.pattern)]),
-    m: ep.markers.slice(0, URL_MARKER_CAP).map(m => [
+    m: ep.markers.map(m => [
       m.zoneId ? zoneIndexOf(m.zoneId) : -1,
       ...m.p.map(round3), ...m.n.map(round3),
       m.intensity,
@@ -56,6 +82,12 @@ export function serializeForUrl(zoneIndexOf) {
       m.groupId ? (groupIndex.get(m.groupId) ?? -1) : -1
     ])
   };
+
+  // Drop points from the end until the link fits. Always keep one: a single
+  // 500-character note can exceed the budget on its own, and a link with no
+  // points at all is worse than one that is slightly too long.
+  while (payload.m.length > 1 && !fitsBudget(payload)) payload.m.pop();
+  return payload;
 }
 
 export function episodeFromUrlPayload(payload, zoneIdAt) {

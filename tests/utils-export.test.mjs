@@ -23,7 +23,7 @@ import {
   clamp, debounce, escHtml, safeJsonParse, base64UrlEncode, base64UrlDecode
 } from '../js/utils.js';
 import { exportEpisodeJson, exportAllJson, buildShareUrl, downloadPng } from '../js/export.js';
-import { episodeFromUrlPayload, URL_MARKER_CAP } from '../js/persist.js';
+import { episodeFromUrlPayload, URL_CHAR_BUDGET } from '../js/persist.js';
 import {
   state, createEpisode, deleteEpisode, addGroup, addMarker,
   setActiveGroup, setCamera, updateImpact, renameEpisode
@@ -307,17 +307,19 @@ test('a note full of curly apostrophes and emoji survives the share link', () =>
   assert.equal(restored.markers[0].note, 'It’s worse when I bend over: 偏頭痛 🤕 · ± ½');
 });
 
-test('the shared link stops at URL_MARKER_CAP points rather than minting an unusable URL', () => {
+test('the shared link stops at the character budget rather than minting an unusable URL', () => {
   freshWorld('Long day');
   const pain = addGroup({ name: 'Migraine' });
   setActiveGroup(pain.id);
-  for (let i = 0; i < URL_MARKER_CAP + 5; i++) addMarker(marker({ zoneId: 'temple-left', intensity: 5 }));
+  for (let i = 0; i < 40; i++) {
+    addMarker(marker({ zoneId: 'temple-left', intensity: 5, note: `point ${i} of the long day` }));
+  }
 
   const url = buildShareUrl(registry.zoneIndexOf);
   const payload = JSON.parse(base64UrlDecode(url.split('#m=')[1]));
-  assert.equal(URL_MARKER_CAP, 12,
-    'the cap is a promise the UI makes (shareWouldTruncate warns against this number); moving it is a deliberate edit');
-  assert.equal(payload.m.length, URL_MARKER_CAP);
+  assert.equal(URL_CHAR_BUDGET, 2000,
+    'the budget is a promise the UI makes (shareWouldTruncate warns against it); moving it is a deliberate edit');
+  assert.ok(payload.m.length < 40, 'a 40-point map cannot fit 2000 characters; something stopped trimming');
 
   // "Unusable" is a length, so measure the length. 2000 is the practical floor
   // among the things that carry these links: old IE stopped at 2083, and chat
