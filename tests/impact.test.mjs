@@ -71,18 +71,29 @@ test('every checkbox group in IMPACT_FIELDS carries its own question and its own
   // doing?", and normalizeImpact then discards every tick made there, because
   // it filters blocked against BLOCKED.
   const OPTIONS_FOR = { blocked: BLOCKED, symptoms: SYMPTOMS, relief: RELIEF };
-  const TITLE_FOR = {
-    blocked: 'What does it stop you doing?',
-    symptoms: 'What comes with it?',
-    relief: 'What helps?'
-  };
+  // The heading is prose, and prose gets reworded: this asks that each group's
+  // heading is a question about *that* group, which is the smallest thing that
+  // still fails when two headings are swapped, and does not fail when one is
+  // rewritten. The exact wording is not a contract of this test and is not
+  // pinned anywhere else either; if it ever needs to be, pin it once, in a test
+  // whose name says it is about the copy.
+  const ASKS_ABOUT = { blocked: /stop/i, symptoms: /come|with/i, relief: /help/i };
   const empty = emptyImpact();
   for (const field of IMPACT_FIELDS) {
     assert.ok(Array.isArray(empty[field.key]), `IMPACT_FIELDS key "${field.key}" is not an array field of an impact`);
     assert.equal(field.options, OPTIONS_FOR[field.key], `${field.key} renders the wrong option list`);
-    assert.equal(field.title, TITLE_FOR[field.key], `${field.key} asks the wrong question above its checkboxes`);
+    assert.match(field.title, /\?$/, `${field.key} has no question above its checkboxes: "${field.title}"`);
+    assert.match(field.title, ASKS_ABOUT[field.key],
+      `${field.key} asks the wrong question above its checkboxes: "${field.title}"`);
   }
-  assert.deepEqual(IMPACT_FIELDS.map(f => f.key), ['blocked', 'symptoms', 'relief']);
+  assert.equal(new Set(IMPACT_FIELDS.map(f => f.title)).size, IMPACT_FIELDS.length,
+    'two groups ask the same question, so one of them is under the wrong heading');
+  // Order, not just membership: panel-impact.js renders these groups in array
+  // order, so this is the order of the form, and it is the order a consultation
+  // asks in (what it stops, what comes with it, what helps). Reordering the
+  // array reorders the page, which is why this stays exact.
+  assert.deepEqual(IMPACT_FIELDS.map(f => f.key), ['blocked', 'symptoms', 'relief'],
+    'the checkbox groups are rendered in this order; changing it rewrites the form');
 });
 
 // ---------------------------------------------------------------------------
@@ -256,22 +267,34 @@ test('frequency and duration collapse into one sentence, and each stands alone w
 });
 
 test('one blocked activity reads without a joiner; two take "and"; three take a comma then "and"', () => {
-  assert.deepEqual(
-    impactSentences(normalizeImpact({ blocked: ['work'] })),
-    ['It stops me working.']
-  );
-  assert.deepEqual(
-    impactSentences(normalizeImpact({ blocked: ['work', 'sleep'] })),
-    ['It stops me working and sleeping.']
-  );
-  assert.deepEqual(
-    impactSentences(normalizeImpact({ blocked: ['work', 'screens', 'drive'] })),
-    ['It stops me working, using a screen and driving.']
-  );
-  assert.deepEqual(
-    impactSentences(normalizeImpact({ blocked: ['work', 'screens', 'drive', 'sleep'] })),
-    ['It stops me working, using a screen, driving and sleeping.']
-  );
+  // What this test owns is the punctuation between N phrases, so the phrases
+  // themselves are spliced in from the one-phrase sentence rather than copied
+  // out of BLOCKED: rewording an activity is a copy change, and the copy is
+  // pinned whole by "a full impact reads as five sentences" below and by
+  // legend.test.mjs. Only the ", " and the " and " are written out here, so
+  // every joiner defect (no joiner, an Oxford comma, a comma before the last
+  // item, a reordering) still lands on the line that names it.
+  const stops = ids => impactSentences(normalizeImpact({ blocked: ids }));
+  const one = ids => {
+    const out = stops(ids);
+    assert.equal(out.length, 1, `${ids.length} activities produced ${out.length} sentences, not one`);
+    return out[0];
+  };
+  const phrase = id => one([id]).replace(/^It stops me /, '').replace(/\.$/, '');
+
+  const single = one(['work']);
+  assert.match(single, /^It stops me \S.*\.$/, 'one activity still needs the lead-in and a full stop');
+  assert.ok(!single.includes(' and '), 'one activity is joined to nothing, so it takes no "and"');
+  assert.ok(!single.includes(','), 'one activity takes no comma');
+
+  assert.equal(one(['work', 'sleep']), `It stops me ${phrase('work')} and ${phrase('sleep')}.`,
+    'two activities take "and" between them and no comma');
+  assert.equal(one(['work', 'screens', 'drive']),
+    `It stops me ${phrase('work')}, ${phrase('screens')} and ${phrase('drive')}.`,
+    'three activities take a comma after the first and "and" before the last, with no comma before the "and"');
+  assert.equal(one(['work', 'screens', 'drive', 'sleep']),
+    `It stops me ${phrase('work')}, ${phrase('screens')}, ${phrase('drive')} and ${phrase('sleep')}.`,
+    'every activity but the last is comma-separated, in the order they were ticked');
 });
 
 test('one lost day is a day, not "1 days"', () => {
@@ -291,14 +314,25 @@ test('one lost day is a day, not "1 days"', () => {
 });
 
 test('symptoms and relief each get their own lead-in', () => {
-  assert.deepEqual(
-    impactSentences(normalizeImpact({ symptoms: ['nausea', 'light'] })),
-    ['It comes with nausea and light hurting.']
-  );
-  assert.deepEqual(
-    impactSentences(normalizeImpact({ relief: ['dark', 'quiet', 'sleep'] })),
-    ['What helps: a dark room, quiet and sleep.']
-  );
+  // The lead-ins are the contract here; the phrases after them are copy, pinned
+  // whole by "a full impact reads as five sentences" below. Each phrase is
+  // spliced in from its own one-item sentence, which keeps the cross-wiring
+  // check honest: a symptom list read through RELIEF produces no sentence at
+  // all, so the helper fails on the count before it can agree with itself.
+  const only = patch => {
+    const out = impactSentences(normalizeImpact(patch));
+    assert.equal(out.length, 1, `${JSON.stringify(patch)} produced ${JSON.stringify(out)}, not one sentence`);
+    return out[0];
+  };
+  const symptom = id => only({ symptoms: [id] }).replace(/^It comes with /, '').replace(/\.$/, '');
+  const relief = id => only({ relief: [id] }).replace(/^What helps: /, '').replace(/\.$/, '');
+
+  assert.equal(only({ symptoms: ['nausea', 'light'] }),
+    `It comes with ${symptom('nausea')} and ${symptom('light')}.`,
+    'the symptoms sentence does not read "It comes with …"');
+  assert.equal(only({ relief: ['dark', 'quiet', 'sleep'] }),
+    `What helps: ${relief('dark')}, ${relief('quiet')} and ${relief('sleep')}.`,
+    'the relief sentence does not read "What helps: …"');
 });
 
 test('a full impact reads as five sentences in consultation order', () => {

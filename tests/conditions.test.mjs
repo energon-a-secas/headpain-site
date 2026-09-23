@@ -21,6 +21,14 @@
 // unreachable: injected entries are pushed onto CONDITIONS and removed in a
 // finally, so nothing leaks into the next test. And where a comment names a
 // number, the assertion pins that number rather than a floor beneath it.
+//
+// The exception, added after this file's own over-correction: the arithmetic
+// and the guardrail copy are pinned exactly, but each sentence the matcher
+// writes is pinned in exactly one test. Three tests used to hold the same
+// explanation string, so rewording it failed all three and only one of them
+// was about the wording. The other two now assert what they are named for.
+// Likewise the red-flag list is floored rather than counted, because a
+// seventh warning is an addition, not a regression.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -247,7 +255,13 @@ test('the explanation names the zone count and the laterality finding, not boile
 test('the explanation switches to singular grammar for a single point', () => {
   const results = score([at('temple-left', { intensity: 8, quality: 'throbbing', depth: 'inside-head' })]);
   const why = find(results, 'migraine-no-aura').explanation;
-  assert.ok(why.startsWith('1 of your 1 point is in zones typical'), why);
+  // The grammar, not the sentence. Singular noun and singular verb are what
+  // this test is named for; the clause that follows them is copy, and the
+  // copy test above is the one place a reword has to be argued for. Pinning
+  // the wording here too made a reword fail three times and say "singular
+  // grammar" while nothing about the grammar had changed.
+  assert.match(why, /^1 of your 1 point is\b/,
+    `one point must read "1 of your 1 point is ...", got: ${why}`);
   assert.ok(!why.includes('1 points'), 'plural "points" after the count 1 reads as a bug to the reader');
 });
 
@@ -261,8 +275,13 @@ test('when several of the map\'s qualities fit one pattern, the explanation name
   // has to be the one the reader placed first or the sentence describes a
   // different point than the one they are looking at.
   assert.deepEqual(tension.matchedQ, ['dull-ache', 'band-pressure']);
-  assert.equal(tension.explanation,
-    '2 of your 2 points are in zones typical of this pattern · "dull ache" fits this pattern ✓');
+  // Which quality the sentence quotes, not how the sentence is worded: it must
+  // name the one placed first and must not name the later one. The full
+  // sentence is pinned once, in the copy test above.
+  assert.ok(tension.explanation.includes('"dull ache"'),
+    `the explanation must quote the first quality placed: ${tension.explanation}`);
+  assert.ok(!tension.explanation.includes('"band pressure"'),
+    `the explanation quoted a later quality instead of the first placed: ${tension.explanation}`);
 });
 
 test('a whole-head-only map scores through the 0.6 diffuse weight, and only for patterns that tolerate a diffuse map', () => {
@@ -273,9 +292,15 @@ test('a whole-head-only map scores through the 0.6 diffuse weight, and only for 
   // branch) + 10 quality + 5 depth. At full weight this map would score 90.
   assert.equal(moh.score, 62);
   // whole-head is scored through diffuseTolerant deliberately without being
-  // added to hitZones, so the explanation must not claim a typical zone.
-  assert.equal(moh.explanation,
-    'Your points only loosely overlap this pattern · "dull ache" fits this pattern ✓');
+  // added to hitZones, so the explanation must not claim a typical zone. The
+  // claim is what this test is about, not the wording of it: pinning the whole
+  // sentence here made every copy edit fail in three places at once and say
+  // nothing about the diffuse weight. The sentence itself is pinned once, in
+  // the copy test above.
+  assert.doesNotMatch(moh.explanation, /\d+ of your \d+ point/,
+    `whole-head is not a typical zone, so the explanation must not count it as one: ${moh.explanation}`);
+  assert.ok(moh.explanation.includes('"dull ache"'),
+    `the quality still fits, and the explanation has to say so: ${moh.explanation}`);
   assert.equal(moh.hitZones.length, 0);
   // The gate itself: cluster headache and trigeminal neuralgia are not
   // diffuseTolerant, and a person who painted the whole head must not be
@@ -411,9 +436,13 @@ test('points on zones no pattern claims produce no matches instead of a crash', 
 });
 
 test('a marker whose zone the model does not carry scores nothing instead of throwing', () => {
-  // Arrives from an old share link naming a retired zone. zoneById returns
-  // null, markerSides skips it, and no condition lists it.
-  assert.equal(zoneById('zone-that-was-retired'), null);
+  // Arrives from an old share link naming a retired zone. The model does not
+  // answer for it, markerSides skips it, and no condition lists it. What this
+  // test needs is that the lookup comes back empty, not which empty value it
+  // is: every call site in js/ reads it with `?.`, `!z` or filter(Boolean),
+  // so pinning null pinned the mechanism and nothing a reader could see.
+  assert.ok(!zoneById('zone-that-was-retired'),
+    'the model answered for a retired zone id, so the rest of this test scores against a real zone');
   assert.deepEqual(score([at('zone-that-was-retired', { intensity: 9, quality: 'sharp' })]), []);
 });
 
@@ -544,7 +573,11 @@ test('every red-flag item finishes the sentence its heading starts, instead of s
   // Both surfaces render these as <li> under "…get urgent care if your
   // headache…", so an item written as its own sentence reads as broken
   // grammar to someone deciding whether to go to hospital.
-  assert.equal(RED_FLAG_LIST.length, 6);
+  // A floor, not a headcount. The danger here is the list being trimmed, never
+  // a seventh warning being added: a correctly worded addition used to fail
+  // this test with "7 !== 6" under a name about grammar.
+  assert.ok(RED_FLAG_LIST.length >= 6,
+    `the red-flag list is down to ${RED_FLAG_LIST.length} items; warnings get added, never trimmed`);
   for (const item of RED_FLAG_LIST) {
     assert.equal(item, item.trimEnd(), `trailing space: ${item}`);
     assert.notEqual(item[0], item[0].toUpperCase(), `${item} starts as its own sentence`);

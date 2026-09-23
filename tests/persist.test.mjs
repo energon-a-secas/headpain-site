@@ -110,24 +110,31 @@ test('a note with a curly apostrophe, an emoji and CJK survives the whole share-
   ep.title = 'Mañana: “左側” pain';
   install(ep);
 
-  const json = JSON.stringify(serializeForUrl(zoneIndexOf));
   // The url-safe alphabet swap can only be tested by a payload whose plain
-  // base64 actually contains the characters it swaps, and that depends on where
-  // the emoji bytes land. This fixture forces all three; if a change to the
-  // payload format shifts the alignment, THIS line fails rather than the next
-  // one quietly checking nothing. (Three of these emoji, not one, for exactly
-  // that reason.)
-  const plain = Buffer.from(json, 'utf8').toString('base64');
-  for (const ch of ['+', '/', '=']) {
-    assert.ok(plain.includes(ch), `the fixture no longer produces a "${ch}", so the next assertion is vacuous`);
+  // base64 actually contains the characters it swaps, and which of the three
+  // land there depends on the payload's exact byte length. Pinning one fixture
+  // that forced all three on the day it was written means this line fails --
+  // talking about an apostrophe -- the next time any *other* module widens the
+  // payload by a field, so the note is padded here until it forces them. Still
+  // an assertion and not a shrug: if no padding does it, the check below would
+  // be quietly vacuous and this says so.
+  const forcesSwaps = s => ['+', '/', '='].every(ch => Buffer.from(s, 'utf8').toString('base64').includes(ch));
+  let json = JSON.stringify(serializeForUrl(zoneIndexOf));
+  for (let pad = 1; pad <= 4 && !forcesSwaps(json); pad++) {
+    ep.markers[0].note = `${note}${'\u{1F92F}'.repeat(pad)}`;
+    json = JSON.stringify(serializeForUrl(zoneIndexOf));
   }
+  assert.ok(forcesSwaps(json),
+    'no padding of the note put a +, a / and an = into the plain base64, so the next assertion is vacuous');
 
   const encoded = base64UrlEncode(json);
   assert.match(encoded, /^[A-Za-z0-9_-]+$/,
     'the payload rides in a URL hash; +, / or = would need escaping the app never does');
 
   const back = episodeFromUrlPayload(JSON.parse(base64UrlDecode(encoded)), zoneIdAt);
-  assert.equal(back.markers[0].note, note, 'the note came back mangled or truncated');
+  assert.equal(back.markers[0].note, ep.markers[0].note, 'the note came back mangled or truncated');
+  assert.ok(back.markers[0].note.startsWith(note),
+    'the curly apostrophe, the emoji and the CJK are the point of this test; padding must not stand in for them');
   assert.equal(back.title, ep.title);
 });
 
@@ -246,7 +253,9 @@ test('a marker still belongs to the same pain on the far side of a share link', 
 test('camera and impact ride along in the link, so a shared map opens at the angle it was drawn from', () => {
   const ep = install(richEpisode());
   const payload = serializeForUrl(zoneIndexOf);
-  assert.equal(payload.i.length, 6, 'impact packs into a fixed 6-element tuple');
+  assert.ok(Array.isArray(payload.i) && payload.i.every(n => typeof n === 'number'),
+    'impact must ride packed as numbers, not as the verbatim answers a URL has no room for '
+    + '(the tuple\'s exact width is impact.js\'s business, and impact.test.mjs pins it)');
 
   const back = linkRoundTrip(ep);
   assert.equal(back.camera.theta, 1.234);
@@ -386,7 +395,8 @@ test('a restored share link leaves no marker without a pain, even when the paylo
     'loose points are adopted into one named pain, not scattered');
   assert.equal(back.markers[0].groupId, back.markers[1].groupId,
     'both loose points belong in one adopted pain, not one new pain each');
-  assert.equal(back.markers[2].groupId, back.groups[0].id, 'a point that named its pain must keep it');
+  assert.equal(back.groups.find(g => g.id === back.markers[2].groupId)?.name, 'Migraine',
+    'a point that named its pain must keep it, not get adopted along with the loose ones');
 });
 
 // ---------------------------------------------------------------------------
@@ -466,7 +476,8 @@ test('imported group ids are remapped, so a marker follows its own pain and not 
     'the file\'s ids were reused, so importing the same file twice would cross-link the two copies');
   assert.equal(back.markers[0].groupId, back.groups[0].id);
   assert.equal(back.markers[1].groupId, back.groups[1].id);
-  assert.equal(state.activeGroupId, back.groups[0].id, 'new points must land in a pain that exists');
+  assert.ok(back.groups.some(g => g.id === state.activeGroupId),
+    'new points must land in a pain that exists; *which* pain ensureActivePain picks is state.js\'s call, pinned there');
 });
 
 test('an imported marker whose pain is missing from the file is adopted rather than left loose', () => {
@@ -547,7 +558,8 @@ test('saveToStorage and loadFromStorage round-trip the diary, the active episode
   assert.deepEqual(state.episodes[0].impact, ep.impact);
   assert.deepEqual(state.episodes[0].groups.map(g => g.pattern), ['star', 'grid']);
   assert.equal(state.episodes[0].markers[0].note, 'behind the eye');
-  assert.equal(state.activeGroupId, state.episodes[0].groups[0].id);
+  assert.ok(state.episodes[0].groups.some(g => g.id === state.activeGroupId),
+    'a reloaded diary must leave new points landing in a pain the restored episode actually owns');
 });
 
 test('loadFromStorage refuses absent, corrupt, wrong-version and empty data without touching the live model', () => {

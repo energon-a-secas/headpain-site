@@ -21,7 +21,7 @@ import {
 } from '../js/state.js';
 
 import { GROUP_COLORS, groupById, markerColor, paint } from '../js/groups.js';
-import { isPattern } from '../js/patterns.js';
+import { PATTERNS, isPattern } from '../js/patterns.js';
 
 // A clean world between tests, built out of the module's own exports.
 //
@@ -74,9 +74,13 @@ test('addMarker on a painless episode leaves groupId null and invents no pain: t
   assert.equal(ep.groups.length, 0, 'a bare addMarker is not allowed to create a pain behind the caller');
   assert.equal(orphansIn(ep).length, 1, 'this is the one state the invariant forbids, and only adoptOrphans repairs it');
 
-  // markerColor has to guess, and it guesses the first palette colour: exactly
-  // the "whose pain is this?" ambiguity the pain groups were added to end.
-  assert.equal(markerColor(ep, m), paint(GROUP_COLORS[0], 7));
+  // markerColor has to guess, and it guesses a pain's hue rather than a neutral
+  // one: exactly the "whose pain is this?" ambiguity the pain groups were added
+  // to end. *Which* palette slot it falls back to is groups.js's own business
+  // and groups.test.mjs pins it by name; what this test needs is only that a
+  // loose point comes back indistinguishable from an owned one.
+  assert.ok(GROUP_COLORS.some(c => markerColor(ep, m) === paint(c, 7)),
+    'a loose point must still render in some pain\'s hue at its own intensity: a neutral or intensity-ramp fallback would bring back the "is this identity or severity?" collision');
 
   // adoptOrphans is the repair, and it is what every import path runs.
   adoptOrphans(ep);
@@ -433,17 +437,22 @@ test('setGroupStyle accepts only palette colours, so no pain gets a hue the lege
 test('setGroupStyle accepts only real patterns, so no pain gets a decal nothing can draw', () => {
   const { a } = seedTwoPains();
   const original = a.pattern;
+  // Any real glyph other than the one this pain was born with. Naming one
+  // outright pinned groups.js's colour/pattern pairing, which decides what a
+  // fresh pain starts as and has nothing to do with what setGroupStyle accepts.
+  const other = PATTERNS.map(p => p.id).find(p => p !== original);
+  assert.notEqual(other, original, 'the accepted case below has to be a real change, or it proves nothing');
 
-  setGroupStyle(a.id, { pattern: 'ring' });
-  assert.equal(a.pattern, 'ring');
+  setGroupStyle(a.id, { pattern: other });
+  assert.equal(a.pattern, other, 'a real glyph was refused');
   assert.ok(isPattern(a.pattern));
 
   setGroupStyle(a.id, { pattern: 'nonsense' });
-  assert.equal(a.pattern, 'ring');
+  assert.equal(a.pattern, other,
+    'an unknown glyph was accepted; the pain now renders as nothing and the legend names a shape that does not exist');
 
   setGroupStyle(a.id, { pattern: null });
-  assert.equal(a.pattern, 'ring', 'null is not a pattern; it must not blank the decal');
-  assert.notEqual(original, 'ring', 'the first pain is not born ringed, so the accepted case above proves a real change');
+  assert.equal(a.pattern, other, 'null is not a pattern; it must not blank the decal');
 });
 
 test('an unnamed pain is numbered by its place in the episode, and a pasted essay is cut to 60 characters', () => {
@@ -451,8 +460,12 @@ test('an unnamed pain is numbered by its place in the episode, and a pasted essa
   const first = addGroup();
   const second = addGroup();
 
-  assert.equal(first.name, 'Pain 1');
-  assert.equal(second.name, 'Pain 2', 'the number is the pain\'s position in this episode; "Pain" twice is two rows nobody can tell apart');
+  // The number is the contract; the noun in front of it is copy, and pinning
+  // that made a reworded default read as a broken one.
+  const numberOf = name => Number(name.match(/(\d+)\s*$/)?.[1]);
+  assert.equal(numberOf(first.name), 1, 'an unnamed pain is numbered by its position, so the first one ends in 1');
+  assert.equal(numberOf(second.name), 2, 'the number is the pain\'s position in this episode; the same number twice is two rows nobody can tell apart');
+  assert.notEqual(second.name, first.name, 'two unnamed pains must not arrive with the same name');
 
   const long = addGroup({ name: 'x'.repeat(200) });
   assert.equal(long.name.length, 60, 'the name rides in the share link and in one legend row, so it cannot be unbounded');

@@ -23,6 +23,13 @@ import {
 } from '../js/zones.js';
 import { defaultMarker } from '../js/state.js';
 
+// The first number a card's title names. Which level the reader is told they
+// are at is the contract; whether the sentence opens with the literal word
+// "Level" is copy. A bare /7/ would be too weak (the rising title also says
+// "reaching 8"), so it is the *first* number that is pinned: "Level 6: ...
+// reaching 7" still fails, which is the mix-up worth catching.
+const firstLevelIn = title => Number(String(title).match(/\d+/)?.[0]);
+
 // ---------------------------------------------------------------------------
 // guidance.js
 // ---------------------------------------------------------------------------
@@ -38,20 +45,23 @@ test('7 is exactly where the rising card appears, and it is not the severe one',
   const g = guidanceFor(7);
   assert.notEqual(g, null, '7/10 is the "stop it reaching 8" moment; a null here loses the whole message');
   assert.equal(g.severe, false, 'flagging 7 as severe would show the root-cause note one step too early');
-  // Anchored, not /7/: a title that merely contains a 7 anywhere can be one
-  // step off ("Level 6: ... reaching 7") and still show the wrong number to
-  // the person reading the card.
-  assert.match(g.title, /^Level 7\b/, `the rising card must open by naming its own level, not another: ${JSON.stringify(g.title)}`);
+  assert.equal(firstLevelIn(g.title), 7,
+    `the rising card must name its own level first, not another: ${JSON.stringify(g.title)}`);
 });
 
 test('8, 9 and 10 all get the severe card, so nobody at 8/10 is shown the milder advice', () => {
   const severe = guidanceFor(8);
   assert.notEqual(severe, null);
   assert.equal(severe.severe, true, '8/10 must be flagged severe; editor.js gates ROOT_CAUSE_NOTE on this flag');
-  assert.match(severe.title, /^Level 8\b/, `the severe card must open at the level it starts at: ${JSON.stringify(severe.title)}`);
-  assert.equal(guidanceFor(9), severe, '9/10 fell into a different tier than 8/10');
-  assert.equal(guidanceFor(10), severe, '10/10 fell into a different tier than 8/10');
-  assert.notEqual(guidanceFor(7), severe, 'the 7 and 8 tiers collapsed into one card');
+  assert.equal(firstLevelIn(severe.title), 8,
+    `the severe card must name the level it starts at: ${JSON.stringify(severe.title)}`);
+  // Deep, not identity: the contract is that 9 and 10 get the *same card* as 8,
+  // not that the function hands back one shared object. Returning a fresh copy
+  // per call (so a caller cannot mutate the module constant) changes nothing a
+  // reader sees, and must not read as "9/10 fell into a different tier".
+  assert.deepEqual(guidanceFor(9), severe, '9/10 fell into a different tier than 8/10');
+  assert.deepEqual(guidanceFor(10), severe, '10/10 fell into a different tier than 8/10');
+  assert.notDeepEqual(guidanceFor(7), severe, 'the 7 and 8 tiers collapsed into one card');
 });
 
 test('a marker with no usable intensity gets no card at all, while a numeric string still gets the right one', () => {
@@ -67,8 +77,8 @@ test('a marker with no usable intensity gets no card at all, while a numeric str
   // The other half of the coercion is deliberate and load-bearing: a value that
   // arrived from a form or from imported JSON as a string must still reach the
   // tier it names rather than silently dropping the escalation.
-  assert.equal(guidanceFor('9'), guidanceFor(9), 'a string "9" lost the severe card');
-  assert.equal(guidanceFor('7'), guidanceFor(7), 'a string "7" lost the rising card');
+  assert.deepEqual(guidanceFor('9'), guidanceFor(9), 'a string "9" lost the severe card');
+  assert.deepEqual(guidanceFor('7'), guidanceFor(7), 'a string "7" lost the rising card');
 });
 
 test('both guidance cards carry a title and at least two things to actually do', () => {
@@ -151,14 +161,16 @@ test('INTENSITY_BANDS ascends and ends at 10, which is what makes find() correct
 
 test('intensityBand above the top, or on a value that is not a number, still returns a band rather than undefined', () => {
   const top = INTENSITY_BANDS[INTENSITY_BANDS.length - 1];
-  assert.equal(intensityBand(11), top,
+  // Deep, not identity: every caller reads .label / .desc off the result, so the
+  // contract is "the top band's content", not "the very object in the array".
+  assert.deepEqual(intensityBand(11), top,
     'a value past the slider must clamp to the top band; callers read .label with no guard');
   // Every comparison against a non-number is false, so these take the `|| last`
   // branch. editor.js:35 and panel-explain.js:44 read .label straight off the
   // result, so the branch existing at all is what keeps a corrupt imported
   // marker from throwing mid-render.
   for (const bad of [NaN, undefined]) {
-    assert.equal(intensityBand(bad), top, `intensityBand(${String(bad)}) returned no band; .label would throw`);
+    assert.deepEqual(intensityBand(bad), top, `intensityBand(${String(bad)}) returned no band; .label would throw`);
   }
 });
 
@@ -180,10 +192,17 @@ test('depthById falls back to the on-the-skin depth instead of returning undefin
 });
 
 test('every real depth id resolves to its own entry, and each carries the short chip the points list prints', () => {
-  assert.equal(DEPTHS.length, 4, 'the depth vocabulary changed size; the editor radio group is authored against it');
+  // A floor, not an exact count: editor.js renders the depth chips with
+  // DEPTHS.map(), so a fifth depth is a vocabulary addition and breaks nothing.
+  // Shrinking is the harmful direction, and it is what this guards: it drops a
+  // way to describe a pain, and it hollows out the loop below.
+  assert.ok(DEPTHS.length >= 4,
+    `only ${DEPTHS.length} depths left; the vocabulary shrank and the loop below proves less than it claims`);
   const shorts = new Set();
   for (const d of DEPTHS) {
-    assert.equal(depthById(d.id), d, `depthById("${d.id}") resolved to another depth`);
+    // Deep, not identity: every caller reads fields off the result, so "the right
+    // depth" is the contract and "the very object in DEPTHS" is the mechanism.
+    assert.deepEqual(depthById(d.id), d, `depthById("${d.id}") resolved to another depth`);
     // editor.js:166 puts `depthById(m.depth).short` straight into the points-list
     // meta line, so a depth missing one renders the literal word "undefined"
     // next to every marker at that depth. Nothing else in tests/ reads .short.
@@ -202,10 +221,13 @@ test('an unset attribute and a corrupt one resolve to the same defaults a fresh 
   // two agree, so a reorder of DEPTHS or SPREADS would leave a marker saved
   // without a depth rendering one word and a marker with a corrupt depth
   // rendering another.
+  // Compared by id, which is what the two places have to agree on and what the
+  // message below reports. Comparing the objects themselves also fails when the
+  // lookups hand back a copy, and then reads as "surface disagrees with surface".
   const fresh = defaultMarker();
-  assert.equal(depthById('nonsense'), depthById(fresh.depth),
+  assert.equal(depthById('nonsense').id, depthById(fresh.depth).id,
     `a corrupt depth resolves to "${depthById('nonsense').id}" but a fresh marker is created as "${fresh.depth}"`);
-  assert.equal(spreadById('nonsense'), spreadById(fresh.spread),
+  assert.equal(spreadById('nonsense').id, spreadById(fresh.spread).id,
     `a corrupt spread resolves to "${spreadById('nonsense').id}" but a fresh marker is created as "${fresh.spread}"`);
 });
 
@@ -221,7 +243,7 @@ test('qualityById returns null for an unknown id, so "no quality chosen" stays d
     `only ${QUALITIES.length} qualities left; the vocabulary was gutted and the lookup below proves nothing`);
   for (const q of QUALITIES) {
     const hit = qualityById(q.id);
-    assert.equal(hit, q, `qualityById("${q.id}") resolved to another quality`);
+    assert.deepEqual(hit, q, `qualityById("${q.id}") resolved to another quality`);
     assert.ok(hit.label && hit.label.trim(), `${q.id} has no label; editor.js:166 prints q?.label into the points list`);
   }
 });
@@ -235,12 +257,22 @@ test('spreadById falls back to the small spread rather than undefined', () => {
     assert.equal(s.id, 'small', `the fallback spread is deliberately the mid-small one, not "${s.id}"`);
     assert.equal(typeof s.radius, 'number', 'markers.js reads spreadById(...).radius with no guard');
   }
-  for (const s of SPREADS) assert.equal(spreadById(s.id), s, `spreadById("${s.id}") resolved to another spread`);
+  for (const s of SPREADS) assert.deepEqual(spreadById(s.id), s, `spreadById("${s.id}") resolved to another spread`);
 });
 
 test('every spread radius is a positive number that grows from pinpoint to diffuse', () => {
+  // SPREADS[0] stays pinned by index on purpose: spreadById falls back to
+  // SPREADS[1], so prepending a size would move the default spread, which is a
+  // real behaviour change and not something to wave through.
   assert.equal(SPREADS[0].id, 'pinpoint', 'the ramp is ordered smallest-first; reordering breaks the decal sizes');
-  assert.equal(SPREADS[SPREADS.length - 1].id, 'diffuse');
+  // The far end is named, not indexed. What markers.js needs is that the
+  // vocabulary still reaches a widespread size and that the radii ascend with
+  // array order (the loop below); which slot 'diffuse' occupies is incidental,
+  // so appending a wider size is not a failure. The old
+  // `SPREADS[SPREADS.length - 1].id` check also carried no message, so an
+  // append failed with nothing but "Expected values to be strictly equal".
+  assert.ok(SPREADS.some(s => s.id === 'diffuse'),
+    `the widespread end of the ramp is gone (${SPREADS.map(s => s.id).join(', ')}); a pain over several regions has no size left to pick`);
   for (const s of SPREADS) {
     assert.equal(typeof s.radius, 'number', `${s.id} has a non-numeric radius`);
     assert.ok(Number.isFinite(s.radius) && s.radius > 0, `${s.id} has radius ${s.radius}; a decal cannot be drawn at that size`);

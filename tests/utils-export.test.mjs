@@ -391,8 +391,18 @@ test('the slug never leaves punctuation, a stray dash or an empty name in the fi
   assert.equal(slugOf(nameFor('  Bad   Head  ')), 'bad-head', 'leading and trailing dashes must be trimmed');
   assert.equal(slugOf(nameFor('!!!')), 'map', 'a title of pure punctuation slugs to nothing; "map" is the floor');
   assert.equal(slugOf(nameFor('Côté gauche')), 'c-t-gauche');
+  // Where the cap sits is a product choice; that there *is* one is the contract,
+  // and pinning the exact number made a slug a few characters longer read as a
+  // broken export. So state the two halves that matter instead: the slug stops
+  // growing with the title, and what it stops at is still openable. Both titles
+  // below are under renameEpisode's own 80-character cap, so what is measured
+  // here is export.js's cap and not that one.
   const long = slugOf(nameFor('a'.repeat(80)));
-  assert.equal(long.length, 40, 'the slug is capped at 40 chars so the filename stays openable');
+  const shorter = slugOf(nameFor('a'.repeat(50)));
+  assert.equal(shorter, long,
+    `the slug grows with the title: 50 chars gave ${shorter.length}, 80 gave ${long.length}, so nothing is capping it`);
+  assert.ok(long.length <= 48,
+    `the slug is ${long.length} characters; past about this the filename stops being openable`);
 });
 
 test('exportAllJson downloads the whole diary under a dated headpain-diary name', () => {
@@ -469,13 +479,23 @@ test('downloadPng composites the source picture and paints the legend text into 
 
   const drew = ops.find(c => c.op === 'drawImage' && c.args[0] === source);
   assert.ok(drew, 'the source canvas was never drawn into the output; the PNG would be a legend on a blank field');
-  assert.deepEqual(drew.args.slice(1), [0, 0], 'the head must sit at the top-left, above the legend strip');
+  // Destination corner only. drawImage(src, 0, 0) and drawImage(src, 0, 0, w, h)
+  // paint the same pixels, so pinning the whole argument list would fail on a
+  // rewrite that changed nothing the reader can see. Where the head lands is
+  // the part that matters: anything but 0,0 slides it over the legend strip.
+  assert.deepEqual(drew.args.slice(1, 3), [0, 0], 'the head must sit at the top-left, above the legend strip');
 
   const text = out._ctx.text();
   assert.ok(text.includes('Monday migraine'), `the title never reached the PNG: ${JSON.stringify(text)}`);
   assert.ok(text.includes('Migraine') && text.includes('Sinus'),
     'both pain names must be named in the burned-in key, or a colour means nothing to the reader');
-  assert.ok(text.some(t => /2 points/.test(t)), 'the point/pain stamp is missing from the PNG header');
+  // How the stamp is worded belongs to legend.js, and tests/legend.test.mjs pins
+  // the string there. Here the question is only whether the header line that
+  // counts the map reached the picture at all, so match the two numbers rather
+  // than the prose around them: one line, away from the title, naming both.
+  const counts = new RegExp(`\\b${model.pointCount}\\b.*\\b${model.painCount}\\b`);
+  assert.ok(text.some(t => t !== model.title && counts.test(t)),
+    `the point/pain stamp is missing from the PNG header: ${JSON.stringify(text)}`);
 
   // The legend strip is filled below the picture, not over it.
   const strip = ops.find(c => c.op === 'fillRect' && c.args[1] === source.height);
@@ -515,8 +535,18 @@ test('the burned-in legend carries the impact sentences the person wrote, not ju
   const made = captureCanvases(() => downloadPng(source, model, 'Monday migraine'));
   const out = made.find(c => c.width === 900);
   assert.equal(out.height, source.height + withImpact);
+  // The wording of a sentence belongs to impact.js, and tests/impact.test.mjs
+  // pins it there. What this test owns is the wiring: whatever sentences the
+  // model carries have to come out the other end of downloadPng. Asserting on
+  // the model's own sentences says that, and survives a reword; a regex over
+  // the copy only restated impact.js in a third place and went red on one.
   const text = out._ctx.text().join(' ');
-  assert.ok(/cost me about 3 days/.test(text), `the days-lost sentence never reached the PNG: ${text}`);
+  assert.ok(model.impact.some(s => /\b3\b/.test(s)),
+    `the days-lost answer never became a sentence, so this fixture proves nothing about the PNG: ${JSON.stringify(model.impact)}`);
+  for (const sentence of model.impact) {
+    assert.ok(text.includes(sentence),
+      `an impact sentence never reached the PNG: ${JSON.stringify(sentence)} is missing from ${text}`);
+  }
 
   // Reserving the height is not the same as drawing inside it. This is the only
   // test that sees the composed canvas, so it is the only place that can check

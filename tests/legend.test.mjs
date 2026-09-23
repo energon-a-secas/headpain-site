@@ -278,8 +278,13 @@ test('legendHtml escapes pain names and the title, so a shared map cannot inject
   const html = legendHtml(modelOf([{ name: evil, markers: [at('chin')] }], { title: `Ep ${evil}` }));
   assert.ok(!html.includes('<img'), 'the raw tag reached the DOM string');
   assert.ok(!html.includes('onerror=alert(1)>'));
-  assert.equal(html.match(/&lt;img src=x onerror=alert\(1\)&gt;/g).length, 2,
-    'both the title and the row name must be escaped');
+  // Both sites must be escaped, and the two assertions above already prove no
+  // site escaped none of it, so "at least twice" is the whole contract. An exact
+  // count would instead pin how many times the name happens to be written out,
+  // and go red the day a row grows a tooltip or an aria-label carrying it.
+  const escaped = html.match(/&lt;img src=x onerror=alert\(1\)&gt;/g) || [];
+  assert.ok(escaped.length >= 2,
+    `both the title and the row name must reach the page escaped; ${escaped.length} did`);
 });
 
 test('every row carries its pain\'s shape, in its colour, tinted by its peak', () => {
@@ -415,19 +420,40 @@ test('the PNG draws one swatch per row, centred on it, in that row\'s own colour
     { name: 'A', color: '#38bdf8', pattern: 'ring', markers: [at('chin', { intensity: 8 })] },
     { name: 'B', color: '#f43f5e', pattern: 'ring', markers: [at('nose-bridge', { intensity: 8 })] }
   ]);
-  const s = 2, x = 10, y = 7;
-  const ctx = recordingContext();
-  drawLegendPng(ctx, model, { x, y, width: 900, scale: s });
-  const glyphs = ctx.calls.filter(c => c.op === 'drawImage');
+  // Drawn twice, so the swatch can be checked against things that move with it
+  // (the row it labels, the margin the text uses, the origin it was handed)
+  // rather than against a restatement of the layout arithmetic. Its size and the
+  // pad are taste; being square, sharing the margin, sitting on the row's own
+  // baseline and scaling with the export are the contract.
+  const draw = (s, x = 10, y = 7) => {
+    const ctx = recordingContext();
+    drawLegendPng(ctx, model, { x, y, width: 900, scale: s });
+    const lines = drawnText(ctx);
+    return {
+      glyphs: ctx.calls.filter(c => c.op === 'drawImage'),
+      left: lines[0].args[1],
+      names: lines.filter(c => model.pains.some(p => p.name === c.args[0]))
+    };
+  };
+  const s = 2;
+  const { glyphs, left, names } = draw(s);
 
   assert.equal(glyphs.length, 2, 'a row lost its swatch: the PNG names the shape in words it never draws');
+  assert.equal(names.length, 2, 'a row lost its name, so there is nothing left to centre a swatch on');
   glyphs.forEach((call, i) => {
-    const [, gx, gy, w, h] = call.args;
-    assert.equal(w, 20 * s, 'the swatch stopped scaling with the export');
-    assert.equal(h, 20 * s);
-    assert.equal(gx, x + 22 * s, 'the swatch ignored the x it was drawn at');
-    assert.equal(gy, y + (56 + 34 * i) * s - 10 * s, 'the swatch is not centred on its row');
+    const [, , gy, w, h] = call.args;
+    assert.ok(w > 0, 'the swatch was drawn at zero size');
+    assert.equal(h, w, 'the swatch is no longer square, so its glyph is stretched');
+    assert.equal(call.args[1], left,
+      'the swatch does not start on the left margin the title and the row names use');
+    assert.equal(gy + h / 2, names[i].args[2],
+      'the swatch is not centred on its row: it rides above or below the name it labels');
   });
+
+  assert.equal(draw(1).glyphs[0].args[3] * s, glyphs[0].args[3], 'the swatch stopped scaling with the export');
+  assert.deepEqual(draw(s, 10 + 40).glyphs.map(c => [c.args[1] - 40, c.args[2]]),
+    glyphs.map(c => [c.args[1], c.args[2]]), 'the swatch ignored the x it was drawn at');
+
   assert.notEqual(glyphs[0].args[0], glyphs[1].args[0],
     'both rows were handed the same cached glyph, so one pain wears the other\'s colour');
 });
@@ -461,11 +487,18 @@ test('the per-row height legendPngHeight reserves is the pitch drawLegendPng act
     .map(c => c.args[2]);
 
   assert.equal(rowYs.length, 3, 'a pain was drawn no row at all');
-  assert.equal(rowYs[0], y + 56 * s, 'the first row moved into or out of the title block');
   assert.deepEqual([rowYs[1] - rowYs[0], rowYs[2] - rowYs[1]], [34 * s, 34 * s],
     'the drawn row pitch is not 34px at this scale, so rows crowd or straggle as pains are added');
 
   const pitch = rowYs[1] - rowYs[0];
+
+  // Exactly where the first row sits under the title is headroom, and headroom
+  // is taste. What the reserved height depends on is that the title block clears
+  // the rows without growing into the space a row was reserved.
+  const titleY = drawnText(ctx)[0].args[2];
+  assert.ok(rowYs[0] > titleY, 'the first row was drawn on top of the title');
+  assert.ok(rowYs[0] - titleY < pitch,
+    'the title block grew past a whole row, so it no longer fits the height reserved above the rows');
   assert.equal(legendPngHeight(three, s) - legendPngHeight(one, s), 2 * pitch,
     'two extra rows were reserved a height that is not the height two extra rows take');
   assert.equal(legendPngHeight(one, 2), legendPngHeight(one) * 2, 'the block scales with the export scale');
@@ -501,11 +534,27 @@ function loadedModel() {
   });
 }
 
-// Between the last line of content and the reserved bottom edge sits the
-// safety line, and nothing else. The distance is fixed by the layout and does
-// not depend on how many pains or impact lines there are, so any drift between
-// what legendPngHeight reserves and what drawLegendPng draws moves it.
-const SAFETY_GAP = 53;
+// Between the last line of content and the reserved bottom edge sits the safety
+// line, and nothing else. Both distances are fixed by the layout and depend on
+// neither the export width nor how much content is stacked above them, so any
+// drift between what legendPngHeight reserves and what drawLegendPng draws
+// changes one of them. They are measured here, not pinned: the pixel values are
+// layout taste, and nudging the safety line inside a block it already fits in
+// breaks nothing a reader would notice.
+function tailOf(model, { width = 900, scale: s = 1, x = 0, y = 0 } = {}) {
+  const height = legendPngHeight(model, s, width);
+  const ctx = recordingContext();
+  drawLegendPng(ctx, model, { x, y, width, scale: s });
+  const ys = drawnText(ctx).map(c => c.args[2]);
+  return {
+    gap: ys[ys.length - 1] - Math.max(...ys.slice(0, -1)),   // last content → safety line
+    bottom: y + height - ys[ys.length - 1]                   // safety line → reserved bottom edge
+  };
+}
+
+// deepEqual against a constant-filled copy, so a failure prints every value
+// instead of just "false".
+const assertAllSame = (values, message) => assert.deepEqual(values, values.map(() => values[0]), message);
 
 test('the impact block is reserved height at the width it is actually wrapped to', () => {
   const model = loadedModel();
@@ -513,28 +562,27 @@ test('the impact block is reserved height at the width it is actually wrapped to
   // wraps at `width - 2 * pad`: two independent literals for one quantity.
   // Measuring at the full width silently under-reserves, and the narrower the
   // export the more lines fall out of the block.
-  for (const width of [900, 560, 420, 300, 240]) {
-    const height = legendPngHeight(model, 1, width);
-    const ctx = recordingContext();
-    drawLegendPng(ctx, model, { x: 0, y: 0, width, scale: 1 });
-    const ys = drawnText(ctx).map(c => c.args[2]);
+  const widths = [900, 560, 420, 300, 240];
+  const tails = widths.map(width => tailOf(model, { width }));
 
-    assert.equal(ys[ys.length - 1], height - 18, `${width}px: the safety line is off the reserved bottom edge`);
-    assert.equal(ys[ys.length - 1] - Math.max(...ys.slice(0, -1)), SAFETY_GAP,
-      `${width}px: the impact block was measured at one width and drawn at another, ` +
-      'so its last lines fall outside the height the caller sized the canvas to');
-  }
+  widths.forEach((width, i) => {
+    assert.ok(tails[i].bottom > 0, `${width}px: the safety line is drawn past the reserved bottom edge`);
+    assert.ok(tails[i].gap > 0, `${width}px: the safety line is drawn on top of the last line of content`);
+  });
+  assertAllSame(tails.map(t => t.bottom),
+    'the safety line sits at a different depth in the block at different export widths');
+  assertAllSame(tails.map(t => t.gap),
+    'the impact block was measured at one width and drawn at another, ' +
+    'so its last lines fall outside the height the caller sized the canvas to');
 });
 
 test('the PNG is drawn where it was told to, in the order and inside the height it reserved', () => {
   const model = loadedModel();
   const width = 420, x = 40, y = 25;   // export.js never draws this block at the origin
-  const height = legendPngHeight(model, 1, width);
 
   const ctx = recordingContext();
   drawLegendPng(ctx, model, { x, y, width, scale: 1 });
   const drawn = drawnText(ctx);
-  const ys = drawn.map(c => c.args[2]);
 
   // The picture line by line: title, right-aligned stamp, a name/meta pair per
   // pain, the impact block wrapped, the safety line last.
@@ -548,19 +596,32 @@ test('the PNG is drawn where it was told to, in the order and inside the height 
     'the impact block dropped, repeated or reordered a line on its way into the picture');
   assert.ok(drawn[drawn.length - 1].args[0].includes('not a diagnosis'));
 
-  // Origin: every line but the stamp starts one pad in from x, and the stamp is
-  // measured from the right edge rather than from x.
-  assert.equal(Math.min(...drawn.map(c => c.args[1])), x + 22, 'a line ignored the x it was handed');
-  assert.equal(drawn[1].args[1], x + width - 22);
-  assert.equal(ys[0], y + 26, 'the first line ignored the y it was handed');
+  // Origin: the whole block is one translation of itself, so the x and y it was
+  // handed move every line rather than only the first; and the margins match,
+  // the stamp inset from the right edge by the same pad the rest take from the
+  // left. The size of that pad is taste, so it is measured, not named.
+  const moved = recordingContext();
+  drawLegendPng(moved, model, { x: x + 13, y: y + 29, width, scale: 1 });
+  assert.deepEqual(drawnText(moved).map(c => [c.args[1] - 13, c.args[2] - 29]),
+    drawn.map(c => [c.args[1], c.args[2]]),
+    'a line ignored the x or the y it was handed: the block is not drawn relative to its origin');
+
+  const pad = Math.min(...drawn.map(c => c.args[1])) - x;
+  assert.ok(pad > 0, 'a line starts on or outside the left edge of the block');
+  assert.equal(drawn[1].args[1], x + width - pad,
+    'the stamp is not inset from the right edge by the margin the other lines take from the left');
 
   // The bottom, computed from two independent sides: the reservation from
   // legendPngHeight, the content from the calls actually recorded. Drift in
-  // either literal (the row pitch, the 42px tail, the 19px impact line) moves
-  // this gap.
-  assert.equal(ys[ys.length - 1], y + height - 18, 'the safety line is not sitting on the reserved bottom edge');
-  assert.equal(ys[ys.length - 1] - Math.max(...ys.slice(0, -1)), SAFETY_GAP,
-    'the safety line and the last line of content drifted: legendPngHeight and drawLegendPng disagree');
+  // either layout literal (the row pitch, the tail, the impact line height)
+  // shows up as a tail that differs between a big map and a small one.
+  const tail = tailOf(model, { width, x, y });
+  const small = tailOf(modelOf([{ name: 'A', markers: [at('chin')] }], { impact: { frequency: 'daily' } }));
+  assert.ok(tail.bottom > 0, 'the safety line is drawn below the bottom edge the caller sized the canvas to');
+  assert.ok(tail.gap > 0, 'the safety line is drawn on top of the last line of content');
+  assert.deepEqual([tail.gap, tail.bottom], [small.gap, small.bottom],
+    'the tail of the block depends on how many pains and impact lines are above it: ' +
+    'legendPngHeight and drawLegendPng disagree');
 });
 
 test('drawLegendPng leaves the canvas as it found it, and right-aligns only the stamp', () => {

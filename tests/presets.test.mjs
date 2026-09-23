@@ -169,17 +169,35 @@ test('materializeSpots skips a zone this model does not carry instead of placing
 test('materializeSpots sends a virtual whole-head zone to the forehead spot, not to a missing anchor', () => {
   const [spot] = materializeSpots([{ zoneId: 'whole-head', intensity: 7 }], registry);
   assert.ok(spot, 'whole-head is a virtual zone the registry does carry; it must not be skipped');
-  // Literals rather than WHOLE_HEAD_SPOT: presets.js pushes that constant's own
-  // arrays, so comparing the spot to it compares a value with itself and moving
-  // the whole-head spot off the head entirely would still pass.
-  assert.deepEqual(spot.p, [0, 0.2, 0.95],
-    'the whole-head spot moved; a diffuse pain now renders somewhere else on the model');
-  assert.deepEqual(spot.n, [0, 0, 1], 'the whole-head normal no longer faces the viewer, so its decal renders edge-on');
-  assert.deepEqual(WHOLE_HEAD_SPOT.p, [0, 0.2, 0.95],
+  // Not a literal triple. Exactly where on the forehead the spot sits is a
+  // design call, and nudging it breaks nothing this test is named for. Two
+  // things must hold instead: materializeSpots places the *exported* constant
+  // (events.js places its own whole-head points from it, so a second copy of the
+  // number here is what would let the two drift), and that constant is still a
+  // point on the front of this head. The bounds for "on this head" are read off
+  // the model's own zone anchors rather than typed in here.
+  assert.deepEqual(spot.p, WHOLE_HEAD_SPOT.p,
     'the exported constant and the spot materializeSpots places have drifted apart; events.js places its own points from the constant');
+  assert.deepEqual(spot.n, WHOLE_HEAD_SPOT.n,
+    'the normal materializeSpots places has drifted from the exported constant; the same whole-head point would face one way from the app and another from a preset');
+  assert.ok(spot.p.length === 3 && spot.p.every(Number.isFinite),
+    `the whole-head spot is ${JSON.stringify(spot.p)}, which is not a finite 3D point; the decal has nowhere to go`);
+  const radii = registry.zones.filter(z => z.anchor).map(z => Math.hypot(...z.anchor));
+  const [rMin, rMax] = [Math.min(...radii), Math.max(...radii)];
+  const r = Math.hypot(...spot.p);
+  assert.ok(r >= rMin && r <= rMax,
+    `the whole-head spot sits ${r.toFixed(3)} from the model centre, outside the ${rMin.toFixed(3)}..${rMax.toFixed(3)} band every real zone anchor lives in; a diffuse pain now renders off the head`);
+  assert.ok(spot.p[2] > 0,
+    'the whole-head spot moved round to the back of the head, which the opening camera never shows; a diffuse pain would load onto an apparently empty head');
+  assert.ok(Math.abs(Math.hypot(...spot.n) - 1) < 0.01,
+    `the whole-head normal has length ${Math.hypot(...spot.n).toFixed(3)} rather than 1, and the decal is scaled by it`);
+  assert.ok(spot.n[2] > 0.5, 'the whole-head normal no longer faces the viewer, so its decal renders edge-on');
   assert.equal(spot.intensity, 7, 'the rest of the marker must survive the position rewrite');
-  assert.equal(registry.zoneById('whole-head').anchor, undefined,
-    'whole-head gained an anchor, so this test no longer exercises the virtual branch it is named for');
+  const virtualZone = registry.zoneById('whole-head');
+  assert.ok(virtualZone.virtual,
+    'whole-head is no longer flagged virtual, and materializeSpots tests that flag before it tests the anchor; this test would go on passing through the no-anchor fallback while the branch it is named for went unexercised');
+  assert.ok(!virtualZone.anchor,
+    'whole-head gained a real anchor, so a regression that dropped the virtual branch would place it there plausibly and nothing here would notice');
 });
 
 test('materializeSpots copies both anchor and normal, so editing a marker cannot move the zone', () => {
@@ -345,15 +363,28 @@ test('every mappable condition produces an episode with markers on real zones', 
 });
 
 // The loop above recomputes the expected name with shortName itself, so it only
-// notices shortName not being applied at all. These two spell the long/short
-// contrast out, so a change to the trimming rule is visible here as well.
+// notices shortName not being applied at all. This one spells the long/short
+// contrast out, so a change to the trimming rule is visible here as well: the
+// chip must be a strict head of the title with every suffix marker gone, which
+// a rule that edits the parenthetical out in place ("Giant cell arteritis:
+// pattern") fails. It reads the two names out of the library instead of
+// restating them, because retitling a condition is an editorial call and not a
+// change to this wiring; the exact trimmed results are pinned in the shortName
+// cases below, which own their own inputs.
 test('the legend chip for a long condition name is the trimmed one, the episode title the full one', () => {
-  const sinus = episodeFromCondition('acute-rhinosinusitis', registry);
-  assert.equal(sinus.title, 'Acute rhinosinusitis (true "sinus headache")');
-  assert.equal(sinus.groups[0].name, 'Acute rhinosinusitis');
-  const gca = episodeFromCondition('giant-cell-arteritis', registry);
-  assert.equal(gca.title, 'Giant cell (temporal) arteritis: pattern');
-  assert.equal(gca.groups[0].name, 'Giant cell', 'the split takes everything from the first " (" onwards, mid-name included');
+  for (const id of ['acute-rhinosinusitis', 'giant-cell-arteritis']) {
+    const c = conditionById(id);
+    assert.ok(c, `${id} is no longer in the library, so this test checks nothing`);
+    const ep = episodeFromCondition(id, registry);
+    const chip = ep.groups[0].name;
+    assert.equal(ep.title, c.name, `${id}: the episode title is not the library's full name`);
+    assert.ok(chip.length < c.name.length,
+      `${id}: the legend chip is the whole name "${chip}"; nothing was trimmed and the chip will not fit`);
+    assert.ok(c.name.startsWith(`${chip} `),
+      `${id}: the legend chip "${chip}" is not the head of "${c.name}"; the rule now rewrites the name rather than cutting it at the first suffix`);
+    assert.ok(!/[(:\u2014]/.test(chip),
+      `${id}: the legend chip "${chip}" still carries a suffix marker, so the cut landed after the first one instead of at it`);
+  }
 });
 
 // ── shortName ───────────────────────────────────────────────────────────────

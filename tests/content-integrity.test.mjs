@@ -41,6 +41,18 @@ const seedZonesFor = c => (c.laterality === 'strict-unilateral'
   ? c.primary.filter(z => !z.endsWith('-right'))
   : c.primary);
 
+// Every string literal a source file compares `field` against, however the
+// comparison happens to be spelled: either operand order, either quote style,
+// and whatever the thing in front of the dot is called. The contract these
+// source-reading tests protect is the *literal* (a zone id, a laterality) and
+// its agreement with the vocabulary elsewhere. Renaming the loop variable or
+// destructuring the field changes no behaviour any of them names, so it must
+// not make them red; changing the literal must.
+const comparedLiterals = (src, field) => [...new Set([
+  ...src.matchAll(new RegExp(`\\b${field}\\s*===\\s*(['"])([^'"]+)\\1`, 'g')),
+  ...src.matchAll(new RegExp(`(['"])([^'"]+)\\1\\s*===\\s*(?:\\w+\\.)?${field}\\b`, 'g'))
+].map(m => m[2]))];
+
 test('every zone a condition names exists on the model, so no published pattern silently loses points', () => {
   const missing = [];
   for (const c of CONDITIONS) {
@@ -160,8 +172,9 @@ test('the zone id the matcher hardcodes for diffuse pain is a zone that actually
   // scoreConditions() special-cases one literal id for "pain everywhere".
   // Renaming the virtual zone without renaming the literal makes every
   // diffuse-tolerant condition quietly score the whole-head marker at zero.
-  const literals = [...readSource('js/conditions.js').matchAll(/m\.zoneId === '([^']+)'/g)].map(m => m[1]);
-  assert.ok(literals.length > 0, 'the diffuse-pain branch of scoreConditions() disappeared');
+  const literals = comparedLiterals(readSource('js/conditions.js'), 'zoneId');
+  assert.ok(literals.length > 0,
+    'nothing in scoreConditions() compares a marker zone id against a literal any more; the diffuse-pain branch is gone or this test can no longer find it');
   for (const id of literals) {
     const z = registry.zoneById(id);
     assert.ok(z, `conditions.js scores against "${id}", which no zone resolves to`);
@@ -306,9 +319,9 @@ test('every condition names a laterality the matcher branches on, so a typo cann
   // The three scored values are read out of the matcher itself; 'any' is the
   // unscored default and the one value with no branch of its own. A typo on
   // either side (content or branch) leaves one of the two lists non-empty.
-  const scored = [...new Set([...readSource('js/conditions.js')
-    .matchAll(/c\.laterality === '([^']+)'/g)].map(m => m[1]))];
-  assert.ok(scored.length >= 3, 'the laterality branches of scoreConditions() disappeared');
+  const scored = comparedLiterals(readSource('js/conditions.js'), 'laterality');
+  assert.ok(scored.length >= 3,
+    'scoreConditions() no longer compares a laterality against literals; the branches are gone or this test can no longer find them');
   const vocabulary = new Set([...scored, 'any']);
   const used = new Set(CONDITIONS.map(c => c.laterality));
   const unknown = [...used].filter(l => !vocabulary.has(l));
@@ -323,8 +336,12 @@ test('every quality contradiction names a condition and a quality that exist, or
   // QUALITY_CONTRADICTIONS is keyed by condition id and is not exported, so it
   // is read from source. A renamed condition leaves the key dangling and the
   // -8 penalty silently stops applying, with nothing else in the suite red.
-  const block = readSource('js/conditions.js').match(/const QUALITY_CONTRADICTIONS = \{([\s\S]*?)\};/);
-  assert.ok(block, 'the contradiction table moved or changed shape; this test can no longer read it');
+  // Anchored on the name and the object literal that follows it, not on the
+  // exact declaration: exporting the table or wrapping it in Object.freeze()
+  // changes nothing this test protects, and must not turn it red.
+  const block = readSource('js/conditions.js').match(/QUALITY_CONTRADICTIONS\s*=[^{]*\{([\s\S]*?)\}/);
+  assert.ok(block,
+    'no QUALITY_CONTRADICTIONS object literal in js/conditions.js: the table was renamed or rebuilt as something other than an object, and this test can no longer read it');
   const entries = [...block[1].matchAll(/'([^']+)':\s*\[([^\]]*)\]/g)]
     .map(m => [m[1], [...m[2].matchAll(/'([^']+)'/g)].map(q => q[1])]);
   assert.ok(entries.length > 0, 'the contradiction table is empty; the -8 penalty can never fire');
