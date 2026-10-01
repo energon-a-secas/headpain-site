@@ -268,6 +268,8 @@ function normalizeEpisode(ep) {
   });
 }
 
+export let storageStatus = 'idle';
+
 export function saveToStorage() {
   if (state.shared) return; // viewing a shared link — never overwrite the local diary
   try {
@@ -277,8 +279,9 @@ export function saveToStorage() {
       activeEpisodeId: state.activeEpisodeId,
       view: state.view
     }));
+    storageStatus = 'saved';
   } catch {
-    // storage full or unavailable — session continues without persistence
+    storageStatus = 'error';
   }
 }
 
@@ -294,10 +297,10 @@ export function loadFromStorage() {
     state.selectedMarkerId = null;
     state.isolateGroupId = null;
     ensureActivePain();
+    storageStatus = 'saved';
     return true;
   } catch {
     return false;
   }
 }
-
 

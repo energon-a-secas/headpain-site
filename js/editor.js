@@ -12,21 +12,42 @@ function guidanceHtml(intensity) {
   const g = guidanceFor(intensity);
   if (!g) return '';
   return `
-    <div class="guidance-card ${g.severe ? 'guidance-card--severe' : ''}">
-      <div class="guidance-title">${escHtml(g.title)}</div>
+    <details class="guidance-card ${g.severe ? 'guidance-card--severe' : ''}" ${g.severe ? 'open' : ''}>
+      <summary>${escHtml(g.title)}</summary>
       <ul>${g.items.map(i => `<li>${escHtml(i)}</li>`).join('')}</ul>
       ${g.severe ? `<p class="guidance-root">${escHtml(ROOT_CAUSE_NOTE)}</p>` : ''}
-    </div>`;
+    </details>`;
 }
 
 export function renderEditor(el, ctx) {
   const marker = selectedMarker();
   if (!marker) {
+    const hasPoints = activeEpisode()?.markers.length > 0;
+    const areas = [
+      ['temple-left', 'Left temple'], ['temple-right', 'Right temple'],
+      ['forehead-upper-center', 'Forehead'], ['occipital-upper-center', 'Back of head'],
+      ['neck-back-upper', 'Neck'], ['whole-head', 'Whole head']
+    ].filter(([id]) => ctx.registry.zoneById(id));
     el.innerHTML = `
-      <div class="empty-note">
-        Tap the head to drop a pain point.<br>
-        <span class="muted">Or use <strong>Add by zone name</strong> below, handy for the neck and back of the head.</span>
+      <div class="welcome-note">
+        <h2>${hasPoints ? 'Your pain, mapped.' : 'Where does it hurt?'}</h2>
+        <p>${hasPoints
+          ? 'Select a point below to adjust it, or tap the head to add another spot.'
+          : 'Tap a spot on the head, or choose an area below. You can change every detail as you go.'}</p>
+        ${hasPoints ? '' : `
+        <ol class="welcome-steps">
+          <li><span class="step-number" aria-hidden="true">1</span><div><strong>Mark the spot</strong><p>Rotate the head to reach any area.</p></div></li>
+          <li><span class="step-number" aria-hidden="true">2</span><div><strong>Make it yours</strong><p>Add the intensity, depth, and feeling.</p></div></li>
+          <li><span class="step-number" aria-hidden="true">3</span><div><strong>Keep it. Share it.</strong><p>Build your diary and show someone your map.</p></div></li>
+        </ol>
+        <div class="quick-areas-label"><h3>Start with an area</h3><span>Left and right are yours</span></div>
+        <div class="quick-areas">${areas.map(([id, label]) => `<button type="button" data-quick-zone="${id}">${label}<span aria-hidden="true">+</span></button>`).join('')}</div>
+        <p class="welcome-example">Want to see how it works? <button type="button" class="link-btn" data-example>Explore an example</button></p>`}
       </div>`;
+    el.querySelectorAll('[data-quick-zone]').forEach(btn => {
+      btn.addEventListener('click', () => ctx.actions.addPointForZone(btn.dataset.quickZone));
+    });
+    el.querySelector('[data-example]')?.addEventListener('click', () => ctx.actions.learn('migraine-no-aura'));
     return;
   }
 
@@ -51,12 +72,13 @@ export function renderEditor(el, ctx) {
 
       <div class="field">
         <div class="field-label">
-          <span>Intensity</span>
-          <span class="field-value" data-ref="readout">${marker.intensity}: ${band.label}</span>
+          <label for="pain-intensity">How much does it hurt?</label>
+          <span class="field-value intensity-value" data-ref="readout">${marker.intensity}/10 · ${band.label}</span>
         </div>
-        <input type="range" min="0" max="10" step="1" value="${marker.intensity}"
-               data-ref="intensity" aria-label="Pain intensity from 0 to 10">
-        <div class="field-desc">${escHtml(band.desc)}</div>
+        <input id="pain-intensity" type="range" min="0" max="10" step="1" value="${marker.intensity}"
+               data-ref="intensity" aria-label="Pain intensity from 0 to 10" aria-valuetext="${marker.intensity} out of 10, ${band.label}" aria-describedby="intensity-description">
+        <div class="range-endpoints" aria-hidden="true"><span>0 · No pain</span><span>10 · Worst imaginable</span></div>
+        <div class="field-desc" id="intensity-description">${escHtml(band.desc)}</div>
         <div data-ref="guidance">${guidanceHtml(marker.intensity)}</div>
       </div>
 
@@ -64,7 +86,7 @@ export function renderEditor(el, ctx) {
         <div class="field-label"><span>How deep does it feel?</span></div>
         <div class="chip-row" data-ref="depths">
           ${DEPTHS.map(d => `<button type="button" class="chip ${d.id === marker.depth ? 'active' : ''}"
-            data-depth="${d.id}">${d.short}</button>`).join('')}
+            data-depth="${d.id}" aria-pressed="${d.id === marker.depth}">${d.short}</button>`).join('')}
         </div>
         <div class="field-desc" data-ref="depth-desc">${escHtml(depth.desc)}</div>
       </div>
@@ -73,7 +95,7 @@ export function renderEditor(el, ctx) {
         <div class="field-label"><span>What does it feel like?</span></div>
         <div class="chip-row" data-ref="qualities">
           ${QUALITIES.map(q => `<button type="button" class="chip ${q.id === marker.quality ? 'active' : ''}"
-            data-quality="${q.id}" title="${escHtml(q.desc)}">${q.label}</button>`).join('')}
+            data-quality="${q.id}" aria-pressed="${q.id === marker.quality}" title="${escHtml(q.desc)}">${q.label}</button>`).join('')}
         </div>
       </div>
 
@@ -81,7 +103,7 @@ export function renderEditor(el, ctx) {
         <div class="field-label"><span>How wide does it spread?</span></div>
         <div class="chip-row" data-ref="spreads">
           ${SPREADS.map(s => `<button type="button" class="chip ${s.id === marker.spread ? 'active' : ''}"
-            data-spread="${s.id}" title="${escHtml(s.desc)}">${s.label}</button>`).join('')}
+            data-spread="${s.id}" aria-pressed="${s.id === marker.spread}" title="${escHtml(s.desc)}">${s.label}</button>`).join('')}
         </div>
       </div>
 
@@ -90,18 +112,19 @@ export function renderEditor(el, ctx) {
         <div class="field-label"><span>Which pain is this?</span></div>
         <div class="chip-row" data-ref="groups">
           ${ep.groups.map(g => `<button type="button" class="chip chip--group ${g.id === marker.groupId ? 'active' : ''}"
-            data-group="${g.id}">${patternSvg(g.pattern, g.color, 13)}${escHtml(g.name)}</button>`).join('')}
+            data-group="${g.id}" aria-pressed="${g.id === marker.groupId}">${patternSvg(g.pattern, g.color, 13)}${escHtml(g.name)}</button>`).join('')}
         </div>
       </div>` : ''}
 
       <div class="field">
-        <div class="field-label"><span>Notes</span><span class="note-counter" data-ref="counter">${marker.note.length}/500</span></div>
-        <textarea class="note-input" data-ref="note" maxlength="500"
+        <div class="field-label"><label for="point-note">Anything else? <span class="muted">(optional)</span></label><span class="note-counter" data-ref="counter">${marker.note.length}/500</span></div>
+        <textarea id="point-note" class="note-input" data-ref="note" maxlength="500"
           placeholder="Triggers, timing, what helped…">${escHtml(marker.note)}</textarea>
       </div>
 
       <div class="editor-actions">
         <button type="button" class="btn btn--danger" data-act="delete">Delete point</button>
+        <button type="button" class="btn btn--primary" data-act="finish">Done with this point</button>
       </div>
     </div>`;
 
@@ -111,7 +134,9 @@ export function renderEditor(el, ctx) {
     const v = +e.target.value;
     ctx.actions.updateSelected({ intensity: v }, { render: false });
     const b = intensityBand(v);
-    ref('readout').textContent = `${v}: ${b.label}`;
+    ref('readout').textContent = `${v}/10 · ${b.label}`;
+    e.target.setAttribute('aria-valuetext', `${v} out of 10, ${b.label}`);
+    el.querySelector('#intensity-description').textContent = b.desc;
     // Same grammar as the head: the pain keeps its hue, saturation tracks intensity.
     const c = paint(groupById(activeEpisode(), marker.groupId)?.color, v);
     const svg = ref('swatch').querySelector('svg');
@@ -144,6 +169,7 @@ export function renderEditor(el, ctx) {
   });
 
   el.querySelector('[data-act="done"]').addEventListener('click', () => ctx.actions.selectPoint(null));
+  el.querySelector('[data-act="finish"]').addEventListener('click', () => ctx.actions.selectPoint(null));
   el.querySelector('[data-act="delete"]').addEventListener('click', () => ctx.actions.deletePoint(marker.id));
 }
 
@@ -153,7 +179,7 @@ export function renderPointsList(el, countEl, ctx) {
   countEl.textContent = markers.length;
 
   if (!markers.length) {
-    el.innerHTML = '<div class="empty-note">No points yet in this episode.</div>';
+    el.innerHTML = '';
     return;
   }
 
@@ -163,28 +189,25 @@ export function renderPointsList(el, countEl, ctx) {
     const q = qualityById(m.quality);
     const color = markerColor(ep, m);
     const group = groupById(ep, m.groupId);
-    const meta = [group?.name, band.label, depthById(m.depth).short, q?.label, m.note ? '📝' : '']
+    const meta = [group?.name, depthById(m.depth).short, q?.label, m.note ? 'Has a note' : '']
       .filter(Boolean).join(' · ');
     return `
       <div class="point-row ${m.id === ctx.state.selectedMarkerId ? 'selected' : ''}" data-id="${m.id}"
-           role="button" tabindex="0">
+           role="group" aria-label="${escHtml(zone?.label || 'Free point')}">
+        <button type="button" class="point-select" data-select-point="${m.id}" aria-label="Edit ${escHtml(zone?.label || 'Free point')}, ${m.intensity} out of 10, ${band.label}">
         <span class="swatch">${patternSvg(markerPattern(ep, m), color, 14)}</span>
-        <div class="point-main">
-          <div class="point-title">${escHtml(zone?.label || 'Free point')}</div>
-          <div class="point-meta">${escHtml(meta)}</div>
-        </div>
-        <button type="button" class="point-del" data-del="${m.id}" aria-label="Delete point">×</button>
+        <span class="point-main">
+          <span class="point-title">${escHtml(zone?.label || 'Free point')}</span>
+          <span class="point-meta">${escHtml(meta)}</span>
+        </span>
+        <span class="point-level">${m.intensity}<span class="muted">/10</span></span>
+        </button>
+        <button type="button" class="point-del" data-del="${m.id}" aria-label="Delete ${escHtml(zone?.label || 'free point')}">×</button>
       </div>`;
   }).join('');
 
-  el.querySelectorAll('.point-row').forEach(row => {
-    row.addEventListener('click', e => {
-      if (e.target.closest('[data-del]')) return;
-      ctx.actions.selectPoint(row.dataset.id);
-    });
-    row.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ctx.actions.selectPoint(row.dataset.id); }
-    });
+  el.querySelectorAll('[data-select-point]').forEach(btn => {
+    btn.addEventListener('click', () => ctx.actions.selectPoint(btn.dataset.selectPoint));
   });
   el.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', () => ctx.actions.deletePoint(btn.dataset.del));

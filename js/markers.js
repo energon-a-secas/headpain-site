@@ -288,13 +288,14 @@ export class MarkerLayer {
   }
 
   // Returns true while any marker is animating (keeps render-on-demand alive).
-  update(t) {
+  update(t, animate = true) {
     let animating = false;
     const fade = this.xray ? (XRAY_FADE.core ?? 1) : 1;
     for (const item of this.items) {
       if (!item.pulseMat) continue;
-      animating = true;
-      item.pulseMat.opacity = (0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3 + item.phase))) * fade * item.dim;
+      animating = animate;
+      const pulse = animate ? 0.55 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3 + item.phase)) : 0.725;
+      item.pulseMat.opacity = pulse * fade * item.dim;
     }
     return animating;
   }

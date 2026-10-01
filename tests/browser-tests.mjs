@@ -752,4 +752,180 @@ await it('a pattern deep link scrolls to that pattern instead of the top', async
   } finally { ctx.destroy(); }
 });
 
+// The workspace workflow uses the same model through accessible controls.
+group('workspace');
+
+await it('a quick area creates a saved point and turns the head toward it', async () => {
+  await withApp('', async ctx => {
+    ctx.doc.querySelector('[data-quick-zone="neck-back-upper"]').click();
+    const ep = activeEp(ctx);
+    assert.equal(ep.markers[0].zoneId, 'neck-back-upper');
+    assert.equal(ctx.win.__headmap.state.selectedMarkerId, ep.markers[0].id);
+    assert.ok(Math.abs(ep.camera.theta) > 2, 'the back of the neck should be visible');
+    assert.equal(ctx.doc.querySelector('#storage-status').dataset.status, 'saved');
+    const stored = JSON.parse(localStorage.getItem('headmap-v2'));
+    assert.equal(stored.episodes[0].markers[0].zoneId, 'neck-back-upper');
+    assert.ok(!ctx.doc.querySelector('#btn-share').disabled);
+  });
+});
+
+await it('camera presets rotate the map without adding a pain point', async () => {
+  await withApp('', async ctx => {
+    ctx.doc.querySelector('[data-camera="back"]').click();
+    const ep = activeEp(ctx);
+    assert.equal(ep.markers.length, 0);
+    assert.equal(ep.camera.theta, Math.PI);
+    assert.equal(ctx.doc.querySelector('[data-camera="back"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(ctx.doc.querySelector('[data-camera="front"]').getAttribute('aria-pressed'), 'false');
+    ctx.doc.querySelector('#btn-reset-view').click();
+    assert.equal(ep.camera.theta, 0);
+  });
+});
+
+await it('search finds named zones and recovers from an empty result', async () => {
+  await withApp('', async ctx => {
+    const search = ctx.doc.querySelector('#zone-search');
+    const type = value => { search.value = value; search.dispatchEvent(new ctx.win.Event('input', { bubbles: true })); };
+    type('temple');
+    const shown = [...ctx.doc.querySelectorAll('[data-zone]')].filter(b => !b.hidden);
+    assert.equal(shown.length, 2);
+    assert.ok(shown.every(b => b.dataset.zone.startsWith('temple-')));
+    type('no-such-area');
+    assert.ok(!ctx.doc.querySelector('#zone-no-results').hidden);
+    type('');
+    assert.ok(ctx.doc.querySelector('#zone-no-results').hidden);
+    assert.gt([...ctx.doc.querySelectorAll('[data-zone]')].filter(b => !b.hidden).length, 40);
+  });
+});
+
+await it('tabs support arrow navigation and edits preserve keyboard focus', async () => {
+  await withApp('', async ctx => {
+    ctx.doc.querySelector('[data-quick-zone="temple-left"]').click();
+    const depth = ctx.doc.querySelector('[data-depth="muscle"]');
+    depth.focus(); depth.click();
+    assert.equal(ctx.doc.activeElement.dataset.depth, 'muscle');
+    assert.equal(ctx.doc.activeElement.getAttribute('aria-pressed'), 'true');
+    const tab = ctx.doc.querySelector('#tab-map');
+    tab.focus();
+    tab.dispatchEvent(new ctx.win.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    assert.equal(ctx.doc.activeElement.id, 'tab-impact');
+    assert.equal(ctx.doc.querySelector('#tab-impact').getAttribute('aria-selected'), 'true');
+    assert.equal(ctx.doc.querySelector('#tab-map').tabIndex, -1);
+  });
+});
+
+await it('a new episode preserves the previous map and does not multiply empty drafts', async () => {
+  await withApp('', async ctx => {
+    ctx.doc.querySelector('[data-quick-zone="temple-left"]').click();
+    const first = activeEp(ctx);
+    ctx.win.__headmap.actions.updateSelected({ intensity: 8 });
+    ctx.doc.querySelector('#btn-new-episode').click();
+    assert.equal(ctx.win.__headmap.state.episodes.length, 2);
+    assert.equal(activeEp(ctx).markers.length, 0);
+    ctx.doc.querySelector('#btn-new-episode').click();
+    assert.equal(ctx.win.__headmap.state.episodes.length, 2, 'an empty draft should be reused');
+    const row = ctx.doc.querySelector(`.episode-row[data-id="${first.id}"]`);
+    assert.includes(row.textContent, '8/10');
+    row.click();
+    assert.equal(activeEp(ctx).id, first.id);
+    assert.equal(activeEp(ctx).markers[0].intensity, 8);
+  });
+});
+
+await it('sharing exposes a read-only link with the current description', async () => {
+  await withApp('', async ctx => {
+    let copied;
+    Object.defineProperty(ctx.win.navigator, 'clipboard', { configurable: true, value: { writeText: async text => { copied = text; } } });
+    ctx.doc.querySelector('[data-quick-zone="temple-left"]').click();
+    ctx.win.__headmap.actions.updateSelected({ note: 'It’s worse after lunch.' });
+    ctx.doc.querySelector('#btn-share').click();
+    assert.ok(!ctx.doc.querySelector('#share-panel').hidden);
+    ctx.doc.querySelector('[data-share-link]').click();
+    await until(() => copied, { label: 'a copied link' });
+    const url = new URL(copied);
+    assert.equal(url.searchParams.get('explain'), '1');
+    const { base64UrlDecode } = await import('../js/utils.js');
+    assert.includes(base64UrlDecode(url.hash.slice(3)), 'It’s worse after lunch.');
+  });
+});
+
+await it('an example is read-only and returning to the diary restores the user map', async () => {
+  await withApp('', async ctx => {
+    const a = ctx.win.__headmap.actions;
+    a.addPointForZone('temple-left');
+    const original = activeEp(ctx).id;
+    const before = localStorage.getItem('headmap-v2');
+    a.learn('migraine-no-aura');
+    const count = activeEp(ctx).markers.length;
+    a.pickOnHead({ zone: { id: 'temple-right' }, p: [0, 0, 1], n: [0, 0, 1] });
+    assert.equal(activeEp(ctx).markers.length, count);
+    assert.equal(localStorage.getItem('headmap-v2'), before);
+    ctx.doc.querySelector('#btn-new-episode').click();
+    assert.equal(activeEp(ctx).id, original);
+    assert.equal(ctx.win.__headmap.state.episodes.length, 1);
+    assert.ok(!ctx.win.__headmap.state.explain);
+  });
+});
+
+await it('a storage failure is visible and a later successful save clears it', async () => {
+  await withApp('', async ctx => {
+    const proto = ctx.win.Storage.prototype;
+    const original = proto.setItem;
+    try {
+      proto.setItem = () => { throw new Error('Storage is full'); };
+      ctx.doc.querySelector('[data-quick-zone="temple-left"]').click();
+      assert.equal(ctx.doc.querySelector('#storage-status').dataset.status, 'error');
+      assert.equal(activeEp(ctx).markers.length, 1, 'the map should remain usable');
+    } finally { proto.setItem = original; }
+    ctx.win.__headmap.actions.updateSelected({ intensity: 7 });
+    assert.equal(ctx.doc.querySelector('#storage-status').dataset.status, 'saved');
+  });
+});
+
+await it('exploring an example preserves the in-memory diary when storage is unavailable', async () => {
+  await withApp('', async ctx => {
+    const proto = ctx.win.Storage.prototype;
+    const original = proto.setItem;
+    try {
+      proto.setItem = () => { throw new Error('Storage is full'); };
+      const a = ctx.win.__headmap.actions;
+      a.addPointForZone('temple-left');
+      const originalId = activeEp(ctx).id;
+      a.learn('migraine-no-aura');
+      ctx.doc.querySelector('#btn-new-episode').click();
+      assert.equal(activeEp(ctx).id, originalId);
+      assert.equal(activeEp(ctx).markers[0].zoneId, 'temple-left');
+    } finally { proto.setItem = original; }
+  });
+});
+
+await it('reduced-motion rendering keeps deep pain visible without pulsing', async () => {
+  await withApp('', async ctx => {
+    ctx.win.__headmap.actions.addPointForZone('temple-left');
+    ctx.win.__headmap.actions.updateSelected({ depth: 'inside-head' });
+    const layer = ctx.win.__headmap.head.debugMarkerLayer();
+    const pulse = layer.items.find(item => item.pulseMat);
+    assert.ok(pulse, 'no inside-head pain core was rendered');
+    assert.equal(layer.update(0, false), false);
+    const opacity = pulse.pulseMat.opacity;
+    layer.update(2, false);
+    assert.equal(pulse.pulseMat.opacity, opacity);
+    assert.gt(opacity, 0, 'the pain disappeared with motion disabled');
+  });
+});
+
+await it('the read-only summary displays point notes safely, with their location', async () => {
+  await withApp('', async ctx => {
+    const a = ctx.win.__headmap.actions;
+    a.addPointForZone('temple-left');
+    const note = 'It’s worse after lunch.\n<img src=x onerror=alert(1)>';
+    a.updateSelected({ note });
+    a.toggleExplain();
+    const notes = ctx.doc.querySelector('.explain-notes');
+    assert.includes(notes.textContent, 'Temple (L)');
+    assert.includes(notes.textContent, note);
+    assert.equal(notes.querySelectorAll('img').length, 0);
+  });
+});
+
 finish();

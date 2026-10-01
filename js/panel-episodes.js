@@ -1,71 +1,83 @@
-// Episodes tab — the local diary: list, rename, delete, export/import, share.
-
+// The local diary: recognisable episodes first, backup and maintenance below.
 import { state, activeEpisode } from './state.js';
 import { escHtml } from './utils.js';
+import { intensityBand } from './zones.js';
+import { patternSvg } from './patterns.js';
+import { trendHtml } from './panel-impact.js';
 
 function fmtDate(iso) {
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
-  } catch {
-    return '';
-  }
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function episodeRow(ep, ctx) {
+  const date = new Date(ep.createdAt);
+  const validDate = !Number.isNaN(date.getTime());
+  const peak = ep.markers.length ? Math.max(...ep.markers.map(m => m.intensity)) : null;
+  const locations = [...new Set(ep.markers.map(m => ctx.registry.zoneById(m.zoneId)?.label || 'Free point'))];
+  const where = locations.slice(0, 2).join(' · ') + (locations.length > 2 ? ` +${locations.length - 2}` : '');
+  return `
+    <button type="button" class="episode-row ${ep.id === state.activeEpisodeId ? 'active' : ''}"
+      data-id="${escHtml(ep.id)}" aria-pressed="${ep.id === state.activeEpisodeId}">
+      <span class="episode-date"><strong>${validDate ? date.getDate() : '·'}</strong><span>${validDate ? date.toLocaleDateString(undefined, { month: 'short' }) : ''}</span></span>
+      <span class="episode-main">
+        <span class="episode-title">${escHtml(ep.title)}</span>
+        <span class="episode-meta">${escHtml(where || 'No pain points yet')}</span>
+        <span class="episode-pains">${ep.groups.slice(0, 4).map(g => patternSvg(g.pattern, g.color, 11)).join('')}
+          <span>${ep.markers.length} point${ep.markers.length === 1 ? '' : 's'}${ep.id === state.activeEpisodeId ? ' · Current' : ''}</span>
+        </span>
+      </span>
+      <span class="episode-severity"><strong>${peak === null ? 'Draft' : `${peak}/10`}</strong><span>${peak === null ? 'Add a point' : escHtml(intensityBand(peak).label)}</span></span>
+    </button>`;
 }
 
 export function renderEpisodes(el, ctx) {
   const ep = activeEpisode();
-
   el.innerHTML = `
-    <div class="privacy-card">
-      Everything stays in <strong>this browser</strong> (localStorage). No account, no server.
-      Export JSON to back up or move devices. Share links encode the map in the URL itself.
+    <div class="diary-heading"><h2>Your pain diary</h2><button type="button" class="btn btn--secondary btn--sm" data-act="new">+ New episode</button></div>
+    <p class="fine-print">A little detail today makes the next conversation easier. Start a new episode each time the pain comes back.</p>
+
+    <div class="diary-current">
+      <label for="episode-title">Name this episode</label>
+      <input id="episode-title" class="episode-rename" data-ref="rename" value="${escHtml(ep.title)}" maxlength="80" placeholder="For example, Monday morning headache">
+      <p class="fine-print">Last updated ${fmtDate(ep.updatedAt)}</p>
     </div>
 
-    <div>
-      <div class="panel-block-head"><h2>Current episode</h2></div>
-      <input class="episode-rename" data-ref="rename" value="${escHtml(ep.title)}"
-             maxlength="80" aria-label="Episode title">
-      <p class="fine-print" style="margin-top:6px">
-        ${ep.markers.length} point${ep.markers.length === 1 ? '' : 's'} · updated ${fmtDate(ep.updatedAt)}
-      </p>
-      <div class="btn-row" style="margin-top:10px">
-        <button type="button" class="btn btn--primary btn--sm" data-act="explain-link">Copy link to show someone</button>
-        <button type="button" class="btn btn--secondary btn--sm" data-act="new">New episode</button>
-      </div>
-      <p class="fine-print" style="margin-top:6px">
-        The first link opens as a read-only page with a legend, for a doctor, a partner or work.
-        The second opens the editor, for another device of your own.
-      </p>
-      <div class="btn-row" style="margin-top:8px">
-        <button type="button" class="btn btn--secondary btn--sm" data-act="share">Copy editable link</button>
-      </div>
-      <div class="btn-row" style="margin-top:8px">
-        <button type="button" class="btn btn--secondary btn--sm" data-act="export-one">Export episode JSON</button>
-        <button type="button" class="btn btn--secondary btn--sm" data-act="export-all">Export all JSON</button>
-      </div>
-      <div class="btn-row" style="margin-top:8px">
-        <button type="button" class="btn btn--ghost btn--sm" data-act="import">Import JSON…</button>
-        <button type="button" class="btn btn--danger btn--sm" data-act="delete">Delete episode</button>
-      </div>
-      <p class="fine-print" style="margin-top:10px">
-        Putting a map in a page of your own?
-        <a class="link-btn" href="embed-builder.html">Build an embed</a>: an iframe with the legend,
-        x-ray, and one pain at a time, driven from your page's own buttons.
-      </p>
+    <div class="diary-list">
+      <div class="panel-block-head"><h2>Episodes <span class="pill">${state.episodes.length}</span></h2></div>
+      ${state.episodes.map(e => episodeRow(e, ctx)).join('')}
     </div>
 
-    <div>
-      <div class="panel-block-head"><h2>Diary <span class="pill">${state.episodes.length}</span></h2></div>
-      ${state.episodes.map(e => `
-        <div class="episode-row ${e.id === state.activeEpisodeId ? 'active' : ''}" data-id="${e.id}"
-             role="button" tabindex="0">
-          <div class="episode-main">
-            <div class="episode-title">${escHtml(e.title)}</div>
-            <div class="episode-meta">${e.markers.length} pts · ${fmtDate(e.updatedAt)}</div>
-          </div>
-        </div>`).join('')}
-    </div>`;
+    <div class="diary-trend">
+      <div class="panel-block-head"><h2>Pain over time</h2></div>
+      ${trendHtml(state.episodes)}
+    </div>
+
+    <details class="diary-tools">
+      <summary>Share or back up your diary</summary>
+      <p class="fine-print">A read-only link lets someone see this map and its description. An editable link lets you continue on another device.</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn--primary btn--sm" data-act="explain-link" ${ep.markers.length ? '' : 'disabled'}>Copy read-only link</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-act="share" ${ep.markers.length ? '' : 'disabled'}>Copy editable link</button>
+      </div>
+      <p class="fine-print">Download a backup to keep your episodes if you clear this browser or change devices.</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn--secondary btn--sm" data-act="export-all">Back up all episodes</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-act="import">Restore a backup</button>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn--ghost btn--sm" data-act="export-one">Export this episode</button>
+      </div>
+      <p class="fine-print">For your own website: <a class="link-btn" href="embed-builder.html">embed a pain map</a>.</p>
+    </details>
+
+    <details class="diary-tools">
+      <summary>Manage this episode</summary>
+      <div class="btn-row"><button type="button" class="btn btn--danger btn--sm" data-act="delete">Delete this episode</button></div>
+    </details>
+    <p class="diary-retention">Your diary stays in this browser. No account, no uploads. Back it up to keep a copy.</p>`;
 
   const act = name => el.querySelector(`[data-act="${name}"]`);
   act('new').addEventListener('click', () => ctx.actions.newEpisode());
@@ -75,14 +87,15 @@ export function renderEpisodes(el, ctx) {
   act('export-all').addEventListener('click', () => ctx.actions.exportAll());
   act('import').addEventListener('click', () => ctx.actions.pickImportFile());
   act('delete').addEventListener('click', () => ctx.actions.deleteEpisode(ep.id));
-
   const rename = el.querySelector('[data-ref="rename"]');
-  rename.addEventListener('change', () => ctx.actions.renameEpisode(ep.id, rename.value));
-
+  rename.addEventListener('change', () => {
+    // Keep the clicked diary control in the DOM when the title field blurs.
+    ctx.actions.renameEpisode(ep.id, rename.value, { render: false });
+    rename.value = ep.title;
+    el.querySelector('.episode-row.active .episode-title').textContent = ep.title;
+    document.title = `HeadPain | ${ep.title}`;
+  });
   el.querySelectorAll('.episode-row').forEach(row => {
     row.addEventListener('click', () => ctx.actions.loadEpisode(row.dataset.id));
-    row.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ctx.actions.loadEpisode(row.dataset.id); }
-    });
   });
 }

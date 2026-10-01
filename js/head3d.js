@@ -48,8 +48,9 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   controls.target.copy(CAM_TARGET);
-  controls.enableDamping = true;
+  controls.enableDamping = !reducedMotion.matches;
   controls.dampingFactor = 0.08;
   controls.enablePan = false;
   controls.minDistance = 2.5;
@@ -196,6 +197,10 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
 
   const ac = new AbortController();
   const opts = { signal: ac.signal };
+  reducedMotion.addEventListener('change', () => {
+    controls.enableDamping = !reducedMotion.matches;
+    requestRender();
+  }, opts);
   renderer.domElement.addEventListener('pointerdown', e => {
     downPos = [e.clientX, e.clientY];
   }, opts);
@@ -238,7 +243,7 @@ export function createHead3D(container, registry, modelUrl = 'assets/head-croppe
     rafId = requestAnimationFrame(loop);
     processHover();
     controls.update(); // damping settles here; fires 'change' while moving
-    const animating = markerLayer ? markerLayer.update(t / 1000) : false;
+    const animating = markerLayer ? markerLayer.update(t / 1000, !reducedMotion.matches) : false;
     if (dirty || animating) {
       renderer.render(scene, camera);
       dirty = false;

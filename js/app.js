@@ -28,5 +28,9 @@ async function boot() {
 boot().catch(err => {
   console.error('HeadPain failed to start:', err);
   const loader = $('#stage-loader');
-  if (loader) loader.innerHTML = '<span>HeadPain could not load its assets. Check the console.</span>';
+  if (loader) {
+    loader.innerHTML = '<strong>The pain map could not load.</strong><span>Check your connection and try again.</span><button type="button" class="btn btn--secondary">Try again</button>';
+    loader.style.pointerEvents = 'auto';
+    loader.querySelector('button').addEventListener('click', () => location.reload());
+  }
 });

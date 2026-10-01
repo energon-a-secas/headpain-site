@@ -20,7 +20,7 @@ function chipHtml(g, count, ctx) {
   const desc = `${colorName(g.color)}, ${patternLabel(g.pattern)}`;
   return `
     <div class="pain-chip ${active ? 'active' : ''} ${isolated ? 'faded' : ''}" data-id="${g.id}"
-         role="button" tabindex="0" aria-pressed="${active}"
+         role="group" aria-label="Pain: ${escHtml(g.name)}"
          title="${state.explain
            ? (active ? `Showing “${escHtml(g.name)}” alone: click to show every pain` : `See “${escHtml(g.name)}” on its own`)
            : (active ? 'New points join this pain' : `Add to “${escHtml(g.name)}” instead`)}">
@@ -28,7 +28,7 @@ function chipHtml(g, count, ctx) {
         aria-label="Colour and shape for ${escHtml(g.name)}: ${desc}" title="Colour and shape (${desc})">
         ${patternSvg(g.pattern, g.color, 16)}
       </button>
-      <span class="pain-name" data-name="${g.id}">${escHtml(g.name)}</span>
+      <button type="button" class="pain-name" data-name="${g.id}" aria-pressed="${active}">${escHtml(g.name)}</button>
       <span class="pain-count" aria-label="${count} point${count === 1 ? '' : 's'}">${count}</span>
       <button type="button" class="pain-del" data-del="${g.id}"
         aria-label="Delete pain ${escHtml(g.name)}">&times;</button>
@@ -65,7 +65,7 @@ export function renderPainBar(el, ctx) {
       <div class="pain-chips" role="group" aria-labelledby="pain-bar-label">
         ${groups.length
           ? groups.map(g => chipHtml(g, counts.get(g.id) || 0, ctx)).join('')
-          : '<span class="pain-empty">Tap the head to start. Your first pain is created for you.</span>'}
+          : '<span class="pain-empty">Your first point starts your map.</span>'}
       </div>
       <button type="button" class="pain-add" data-act="add">+ Add pain</button>
     </div>
@@ -76,7 +76,7 @@ export function renderPainBar(el, ctx) {
   el.querySelectorAll('.pain-chip').forEach(chip => {
     const id = chip.dataset.id;
     chip.addEventListener('click', e => {
-      if (e.target.closest('button') || e.target.closest('input')) return;
+      if (e.target.closest('button:not(.pain-name)') || e.target.closest('input')) return;
       // Reading a map and building one want opposite things from a chip click:
       // a reader wants to see that pain alone, an author wants to add to it.
       if (state.explain) ctx.actions.isolatePain(id);
@@ -84,15 +84,8 @@ export function renderPainBar(el, ctx) {
       else ctx.actions.setActivePain(id);
     });
     chip.addEventListener('keydown', e => {
-      if (e.target.closest('button') || e.target.closest('input')) return;
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (state.explain) ctx.actions.isolatePain(id); else ctx.actions.setActivePain(id);
-      } else if (e.key === 'F2' && !state.explain) { e.preventDefault(); startRename(el, id, ctx); }
-    });
-    chip.addEventListener('dblclick', e => {
-      if (e.target.closest('button')) return;
-      startRename(el, id, ctx);
+      if (!e.target.closest('.pain-name')) return;
+      if (e.key === 'F2' && !state.explain) { e.preventDefault(); startRename(el, id, ctx); }
     });
   });
 
@@ -139,6 +132,7 @@ export function startRename(el, id, ctx) {
     if (done) return;
     done = true;
     ctx.actions.renamePain(id, save ? input.value : group.name);
+    el.querySelector(`[data-name="${id}"]`)?.focus({ preventScroll: true });
   };
   input.addEventListener('click', e => e.stopPropagation());
   input.addEventListener('keydown', e => {

@@ -39,6 +39,7 @@
   <script defer src="js/neorgon-header.js"></script>
   <meta name="neo-repo" content="energon-a-secas/headpain-site">
   <link rel="stylesheet" href="css/neorgon-footer.css">
+  <link rel="stylesheet" href="css/workspace.css">
   <script defer src="js/neorgon-footer.js"></script>
   <script type="importmap">
   {
@@ -62,7 +63,7 @@
   }
   </script>
 </head>
-<body>
+<body class="headpain-app">
 
   <a class="skip-link" href="#main">Skip to content</a>
 
@@ -108,16 +109,40 @@
   </header>
 
   <main id="main" class="app-frame">
-    <div class="disclaimer-strip" role="note">
-      <span class="disclaimer-icon" aria-hidden="true">!</span>
-      <span>HeadPain helps you describe pain: it cannot diagnose. Sudden or worst-ever headache is an emergency.</span>
-    </div>
+    <section class="workspace-heading" aria-labelledby="workspace-title">
+      <div class="workspace-intro">
+        <p class="eyebrow">A clearer picture of your pain</p>
+        <h2 id="workspace-title">Show where it hurts.</h2>
+        <p>Map what you feel. Keep a diary. Help someone understand.</p>
+      </div>
+      <div class="workspace-actions">
+        <span class="storage-status" id="storage-status" role="status" aria-live="polite" aria-atomic="true"><span class="status-dot" aria-hidden="true"></span>No account. Private to this browser.</span>
+        <div class="workspace-buttons">
+          <button type="button" class="btn btn--secondary" id="btn-new-episode"><span aria-hidden="true">+</span> New episode</button>
+          <button type="button" class="btn btn--primary" id="btn-share" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-4 4 4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+            Share map
+          </button>
+        </div>
+      </div>
+    </section>
 
-    <!-- The pain bar sits above the head, not inside a panel: which pain you are
-         adding to is the first decision, so it is the first thing on the page. -->
-    <div id="pain-bar" class="pain-bar" aria-label="Pains in this episode"></div>
+    <section id="share-panel" class="share-panel" aria-labelledby="share-title" hidden>
+      <div><h2 id="share-title">Help someone understand.</h2><p>Share a readable map with a doctor or someone you trust. Anyone with the link can read the details you include.</p></div>
+      <div class="share-options">
+        <button type="button" class="btn btn--primary" data-share-link>Copy read-only link</button>
+        <button type="button" class="btn btn--secondary" data-share-image>Download image</button>
+        <button type="button" class="btn btn--ghost" data-close-share aria-label="Close sharing options">Close</button>
+      </div>
+    </section>
 
     <div class="app-layout">
+      <section class="map-workspace" aria-labelledby="map-title">
+        <div class="map-heading">
+          <div><h2 id="map-title">Your pain map</h2><span id="map-episode-title">My first map</span></div>
+          <button type="button" class="btn btn--ghost btn--sm" id="btn-explain" aria-pressed="false" title="Read-only summary for showing someone else (E)">Preview summary</button>
+        </div>
+        <div id="pain-bar" class="pain-bar" aria-label="Pains in this episode"></div>
       <section id="stage" class="stage" aria-label="3D head pain map">
         <div id="stage-loader" class="stage-loader" aria-live="polite">
           <div class="loader"></div>
@@ -125,40 +150,61 @@
         </div>
         <div id="stage-fallback" class="stage-fallback" hidden>
           <p>This browser can't show the 3D head.</p>
-          <p>You can still build a map with <strong>Add by zone name</strong> in the Map tab.</p>
+          <p>You can still map your pain by choosing a named area.</p>
+          <button type="button" class="btn btn--primary" data-open-zones>Choose an area</button>
         </div>
         <div id="zone-tooltip" class="zone-tooltip" hidden></div>
         <div class="stage-toolbar" role="toolbar" aria-label="View controls">
-          <button type="button" class="chip-btn" id="btn-xray" aria-pressed="false" title="See deep pain columns (X)">X-ray</button>
-          <button type="button" class="chip-btn" id="btn-isolate" aria-pressed="false" disabled title="Add a second pain to isolate one of them">Isolate</button>
-          <button type="button" class="chip-btn" id="btn-reset-view" title="Back to front view (R)">Reset<span class="wide-only"> view</span></button>
-          <button type="button" class="chip-btn" id="btn-png" title="Download a PNG of this view, legend included">PNG</button>
-          <button type="button" class="chip-btn" id="btn-explain" aria-pressed="false" title="Read-only view for showing someone else (E)">Explain</button>
+          <button type="button" class="chip-btn" id="btn-xray" aria-pressed="false" title="See how deep your pain feels (X)">X-ray</button>
+          <button type="button" class="chip-btn" id="btn-isolate" aria-pressed="false" disabled title="Add a second pain to isolate one of them">Focus pain</button>
+          <button type="button" class="chip-btn" id="btn-reset-view" title="Back to front view (R)">Reset view</button>
+          <button type="button" class="chip-btn" id="btn-png" title="Download a PNG of this view, legend included">Save image</button>
         </div>
         <div class="stage-hint" id="stage-hint">Tap the head to drop a pain point</div>
         <div id="stage-legend" class="stage-legend" aria-hidden="true"></div>
       </section>
+        <div class="map-navigation">
+          <div class="view-presets" role="group" aria-label="View the head from a different angle">
+            <button type="button" data-camera="front" aria-pressed="true">Front</button>
+            <button type="button" data-camera="left" aria-pressed="false" title="Your left side">Left</button>
+            <button type="button" data-camera="back" aria-pressed="false">Back</button>
+            <button type="button" data-camera="right" aria-pressed="false" title="Your right side">Right</button>
+          </div>
+          <span class="map-gesture">Drag to rotate · Pinch or scroll to zoom</span>
+        </div>
+        <div class="map-caption">
+          <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="m17 8 4 7h-8z"/></svg>Each pain has its own colour and shape.</span>
+          <span id="map-point-count" aria-live="polite">No points yet</span>
+        </div>
+      </section>
 
       <aside class="panel" aria-label="Pain map panels">
         <div class="tabs" role="tablist" aria-label="Panels">
-          <button type="button" class="tab active" id="tab-map" role="tab" aria-selected="true" aria-controls="panel-map">Map</button>
-          <button type="button" class="tab" id="tab-impact" role="tab" aria-selected="false" aria-controls="panel-impact">Impact</button>
-          <button type="button" class="tab" id="tab-conditions" role="tab" aria-selected="false" aria-controls="panel-conditions">Patterns</button>
-          <button type="button" class="tab" id="tab-episodes" role="tab" aria-selected="false" aria-controls="panel-episodes">Diary</button>
+          <button type="button" class="tab active" id="tab-map" role="tab" aria-selected="true" aria-controls="panel-map" tabindex="0">Map pain</button>
+          <button type="button" class="tab" id="tab-impact" role="tab" aria-selected="false" aria-controls="panel-impact" tabindex="-1">Daily impact</button>
+          <button type="button" class="tab" id="tab-conditions" role="tab" aria-selected="false" aria-controls="panel-conditions" tabindex="-1">Patterns</button>
+          <button type="button" class="tab" id="tab-episodes" role="tab" aria-selected="false" aria-controls="panel-episodes" tabindex="-1">My diary</button>
         </div>
 
         <section id="panel-map" class="tabpanel active" role="tabpanel" aria-labelledby="tab-map" tabindex="0">
           <div id="editor"></div>
-          <div class="panel-block">
+          <div class="panel-block" id="points-block">
             <div class="panel-block-head">
-              <h2>Points <span class="pill" id="points-count">0</span></h2>
+              <h2>Mapped points <span class="pill" id="points-count">0</span></h2>
               <button type="button" class="btn btn--ghost btn--sm" id="btn-clear-points">Clear all</button>
             </div>
             <div id="points"></div>
-            <details class="zone-browser" id="zone-browser">
-              <summary>Add by zone name</summary>
-              <div id="zones"></div>
-            </details>
+          </div>
+          <details class="zone-browser" id="zone-browser">
+            <summary>Choose a named area</summary>
+            <div class="zone-search-wrap"><label for="zone-search">Find an area of the head or neck</label><input id="zone-search" type="search" placeholder="Try temple, forehead, neck…" autocomplete="off" aria-controls="zones"></div>
+            <div id="zones"></div>
+            <p id="zone-no-results" class="fine-print" role="status" hidden>No areas match. Try a broader name like “head” or “neck”.</p>
+          </details>
+          <div class="map-next-step" id="map-next-step" hidden>
+            <span>There’s more to pain than where it hurts.</span>
+            <button type="button" class="btn btn--secondary" data-go-impact>Add daily impact <span aria-hidden="true">→</span></button>
+            <button type="button" class="btn btn--primary" data-preview-summary>Preview &amp; share <span aria-hidden="true">→</span></button>
           </div>
         </section>
 
@@ -184,6 +230,11 @@
       <!-- Explain view: the same scene and the same legend model, with the
            editor removed. What a share link opens for the person you sent it to. -->
       <aside id="explain-panel" class="explain-panel" aria-label="What this map says"></aside>
+    </div>
+
+    <div class="disclaimer-strip" role="note">
+      <span class="disclaimer-icon" aria-hidden="true">!</span>
+      <span>A tool for describing pain, not a diagnosis. <strong>Sudden or worst-ever headache is an emergency.</strong></span>
     </div>
   </main>
 

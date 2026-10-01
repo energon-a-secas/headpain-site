@@ -7,10 +7,12 @@ import { renderMatches } from './panel-conditions.js';
 import { renderEpisodes } from './panel-episodes.js';
 import { renderExplain } from './panel-explain.js';
 import { renderImpact } from './panel-impact.js';
+import { renderWorkspace, rememberFocus } from './workspace.js';
 
 export function renderAll(ctx) {
   const ep = activeEpisode();
   if (!ep) return;
+  const restoreFocus = rememberFocus();
   ctx.head.sync(ep.markers, ctx.state.selectedMarkerId, ctx.ui.hoverZoneId, ep.groups, ctx.state.isolateGroupId);
   renderPainBar(ctx.els.painBar, ctx);
   renderEditor(ctx.els.editor, ctx);
@@ -23,21 +25,23 @@ export function renderAll(ctx) {
   const pain = activeGroup();
   const iso = isolatedGroup();
   ctx.els.stageHint.textContent = pain
-    ? `Adding to “${pain.name}”: tap the head`
-    : 'Tap the head to drop a pain point';
+    ? `Tap to add another spot to “${pain.name}”`
+    : 'Tap where it hurts to place your first point';
   ctx.els.stageHint.classList.toggle('dim', ep.markers.length > 0);
 
   // Isolate only means something once a second pain exists.
   const canIsolate = ep.groups.length > 1;
   ctx.els.btnIsolate.disabled = !canIsolate;
   ctx.els.btnIsolate.setAttribute('aria-pressed', String(Boolean(iso)));
-  ctx.els.btnIsolate.textContent = iso ? `Only “${iso.name}”` : 'Isolate';
+  ctx.els.btnIsolate.textContent = iso ? 'All pains' : 'Focus pain';
   ctx.els.btnIsolate.title = canIsolate
     ? 'Show the selected pain on its own (I)'
     : 'Add a second pain to isolate one of them';
 
   ctx.els.btnExplain.setAttribute('aria-pressed', String(ctx.state.explain));
-  ctx.els.btnExplain.textContent = ctx.state.explain ? 'Back to editing' : 'Explain';
+  ctx.els.btnExplain.textContent = ctx.state.explain ? 'Edit map' : 'Preview summary';
 
+  renderWorkspace(ctx);
+  restoreFocus();
   document.title = `HeadPain | ${ep.title}`;
 }

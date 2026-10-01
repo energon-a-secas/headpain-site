@@ -18,13 +18,13 @@ function chipRow(options, selected, attr) {
   const chosen = Array.isArray(selected) ? selected : [selected];
   return `<div class="chip-row">${options.map(o => `
     <button type="button" class="chip ${chosen.includes(o.id) ? 'active' : ''}"
-      data-${attr}="${o.id}">${escHtml(o.label)}</button>`).join('')}</div>`;
+      data-${attr}="${o.id}" aria-pressed="${chosen.includes(o.id)}">${escHtml(o.label)}</button>`).join('')}</div>`;
 }
 
 // One bar per episode, tallest = worst point in it, coloured by the pain that
 // peaked. A diary is only useful over time, and a list of filenames does not
 // show time.
-function trendHtml(episodes) {
+export function trendHtml(episodes) {
   const dated = episodes
     .map(ep => {
       if (!ep.markers.length) return null;
@@ -79,11 +79,10 @@ export function renderImpact(el, ctx) {
   const sentences = impactSentences(impact);
 
   el.innerHTML = `
-    <h2 class="section-title">What this pain costs you</h2>
+    <h2 class="section-title">How does it affect your day?</h2>
     <p class="fine-print">
-      A map says where it hurts. This says what it does to your week, which is the part
-      a doctor, a partner or a manager actually needs. It travels with the map: into the
-      explain view, the shared link and the exported picture.
+      Add anything you want someone to understand. These details become a short description
+      that travels with your map. Every question is optional.
     </p>
 
     <div class="impact-summary ${sentences.length ? '' : 'impact-summary--empty'}">

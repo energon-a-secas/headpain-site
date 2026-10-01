@@ -24,6 +24,7 @@ import { renderDemos } from './panel-demos.js';
 import { exportEpisodeJson, exportAllJson, buildShareUrl, downloadPng } from './export.js';
 import { buildLegend } from './legend.js';
 import { $, debounce, safeJsonParse } from './utils.js';
+import { initWorkspace, renderStorageStatus, renderWorkspace } from './workspace.js';
 
 const TABS = ['map', 'impact', 'conditions', 'episodes'];
 
@@ -86,6 +87,7 @@ export function initApp(ctx) {
       absorbShared();
       updateMarker(state.selectedMarkerId, patch);
       saveToStorage();
+      renderStorageStatus();
       if (opts.render === false) {
         if (!opts.skipHead) {
           const ep = activeEpisode();
@@ -141,6 +143,7 @@ export function initApp(ctx) {
       mutate(() => {
         g = addGroup({});
         setActiveGroup(g.id);
+        selectMarker(null);
       });
       // Straight into the name field: naming is the whole point of a new pain.
       startRename(els.painBar, g.id, ctx);
@@ -289,8 +292,12 @@ export function initApp(ctx) {
       mutate(() => deleteEpisode(id));
     },
 
-    renameEpisode(id, title) {
-      mutate(() => renameEpisode(id, title));
+    renameEpisode(id, title, { render = true } = {}) {
+      absorbShared();
+      renameEpisode(id, title);
+      saveToStorage();
+      if (render) renderAll(ctx);
+      else renderWorkspace(ctx);
     },
 
     setImpact(patch) {
@@ -318,7 +325,7 @@ export function initApp(ctx) {
       // a URL that quietly dropped half the map.
       const dropped = shareWouldTruncate(registry.zoneIndexOf);
       const what = opts.explain ? 'Explain link copied' : 'Share link copied';
-      navigator.clipboard.writeText(url)
+      Promise.resolve().then(() => navigator.clipboard.writeText(url))
         .then(() => toast(dropped
           ? `${what}, but ${dropped} point${dropped === 1 ? '' : 's'} would not fit in the link. Export JSON for the full map.`
           : opts.explain
@@ -366,6 +373,7 @@ export function initApp(ctx) {
         const active = tab === name;
         $(`#tab-${tab}`).classList.toggle('active', active);
         $(`#tab-${tab}`).setAttribute('aria-selected', String(active));
+        $(`#tab-${tab}`).tabIndex = active ? 0 : -1;
         $(`#panel-${tab}`).classList.toggle('active', active);
       }
     }
@@ -387,6 +395,7 @@ export function initApp(ctx) {
   head.onCameraChange = debounce((theta, phi, dist) => {
     setCamera(theta, phi, dist);
     saveToStorage();
+    renderStorageStatus();
   }, 400);
 
   els.stage.addEventListener('pointermove', e => {
@@ -472,6 +481,7 @@ export function initApp(ctx) {
   }
 
   els.btnXray.setAttribute('aria-pressed', String(state.view === 'xray'));
+  initWorkspace(ctx);
   renderZoneBrowser(els.zones, ctx);
   renderRedFlags(els.redflags);
   renderLibrary(els.library, ctx);

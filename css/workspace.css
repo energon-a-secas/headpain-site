@@ -1,0 +1,274 @@
+/* The mapper's workspace. Shared Neorgon kits and embedded maps keep their skins. */
+.headpain-app {
+  --bg: oklch(19% 0.012 235);
+  --bg-stage: oklch(22% 0.016 235);
+  --surface-1: oklch(23% 0.012 235);
+  --surface-2: oklch(27% 0.012 235);
+  --surface-3: oklch(31% 0.014 235);
+  --border-subtle: oklch(34% 0.014 235);
+  --border: oklch(40% 0.015 235);
+  --border-strong: oklch(57% 0.022 220);
+  --text-primary: oklch(94% 0.009 180);
+  --text-secondary: oklch(82% 0.012 210);
+  --text-muted: oklch(70% 0.018 220);
+  --accent: oklch(77% 0.11 166);
+  --accent-bright: oklch(83% 0.1 166);
+  --accent-soft: oklch(30% 0.04 170);
+  --danger: oklch(78% 0.12 15);
+  --danger-soft: oklch(27% 0.035 15);
+  --warning: oklch(83% 0.105 80);
+  color-scheme: dark;
+}
+
+.headpain-app :where(button, input, textarea, select, summary, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 4px;
+}
+.headpain-app button { transition: color 160ms, background-color 160ms, border-color 160ms; }
+.headpain-app button:disabled { cursor: not-allowed; opacity: 0.45; }
+.headpain-app .skip-link { z-index: 300; color: var(--bg); }
+.headpain-app .app-frame { width: 100%; max-width: 1660px; margin: 0 auto; padding: 24px 32px 0; }
+.workspace-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-shrink: 0; margin-bottom: 24px; }
+.workspace-intro .eyebrow { margin: 0 0 4px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); }
+.workspace-intro h2 { margin: 0; font-size: 2rem; line-height: 1.25; font-weight: 600; letter-spacing: -0.04em; }
+.workspace-intro > p:last-child { margin: 8px 0 0; font-size: 0.9rem; color: var(--text-muted); }
+.workspace-actions { display: grid; justify-items: end; gap: 12px; }
+.workspace-buttons { display: flex; gap: 8px; }
+.storage-status { display: flex; align-items: center; gap: 7px; font-size: 0.75rem; color: var(--text-muted); }
+.status-dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; flex-shrink: 0; }
+.storage-status[data-status="error"] { color: var(--warning); }
+.storage-status[data-status="error"] .status-dot { background: var(--warning); }
+.headpain-app .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 9px 15px; font-size: 0.82rem; border-radius: 8px; }
+.headpain-app .btn svg { width: 17px; height: 17px; }
+.headpain-app .btn--primary { background: var(--accent); color: oklch(20% 0.035 170); }
+.headpain-app .btn--primary:hover { background: var(--accent-bright); }
+.headpain-app .btn--secondary { background: var(--surface-2); }
+.headpain-app .btn--sm { min-height: 36px; padding: 6px 10px; font-size: 0.75rem; }
+.headpain-app .btn--ghost { color: var(--text-secondary); }
+.headpain-app .app-layout { grid-template-columns: minmax(0, 1.45fr) minmax(370px, 1fr); gap: 20px; }
+
+/* One continuous map surface, with controls outside the anatomy. */
+.map-workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--bg-stage); }
+.map-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 17px 20px 12px; }
+.map-heading h2 { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.map-heading > div { min-width: 0; }
+#map-episode-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; color: var(--text-muted); max-width: 38ch; }
+.map-heading .btn { flex-shrink: 0; }
+.headpain-app .pain-bar { padding: 4px 20px 12px; border: 0; background: none; }
+.headpain-app .pain-bar-label { display: none; }
+.headpain-app .pain-empty { font-size: 0.75rem; }
+.headpain-app .pain-add { min-height: 36px; border-style: solid; border-radius: 7px; }
+.headpain-app .pain-chip { border-radius: 7px; }
+.headpain-app .pain-chip.active { border-color: var(--border-strong); background: var(--surface-3); }
+.headpain-app .pain-name { max-width: 19ch; appearance: none; font-family: inherit; border: 0; background: none; padding: 4px 0; min-height: 28px; text-align: left; cursor: pointer; }
+.headpain-app .pain-style, .headpain-app .pain-del { min-width: 28px; min-height: 28px; }
+.headpain-app .style-pop { background: var(--surface-1); max-width: calc(100% - 32px); }
+.headpain-app .stage { flex: 1; min-height: 230px; border-top: 1px solid var(--border-subtle); }
+.headpain-app .stage-toolbar { top: 14px; left: 16px; right: 16px; gap: 6px; justify-content: flex-start; }
+.headpain-app .chip-btn { min-height: 36px; padding: 6px 11px; border-radius: 7px; font-size: 0.74rem; background: var(--bg-stage); backdrop-filter: none; }
+.headpain-app #btn-png { margin-left: auto; }
+.headpain-app .stage-hint { bottom: 16px; padding: 8px 14px; color: var(--text-secondary); font-size: 0.76rem; background: var(--surface-1); backdrop-filter: none; border-radius: 8px; white-space: normal; text-align: center; max-width: calc(100% - 24px); width: max-content; }
+.headpain-app .stage-hint.dim { opacity: 1; }
+.map-navigation { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--border-subtle); }
+.view-presets { display: flex; gap: 3px; padding: 3px; background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 8px; }
+.view-presets button { font: inherit; font-size: 0.75rem; min-height: 32px; padding: 5px 12px; border: 1px solid transparent; border-radius: 5px; background: none; color: var(--text-muted); cursor: pointer; }
+.view-presets button:hover { color: var(--text-primary); background: var(--surface-2); }
+.view-presets button[aria-pressed="true"] { color: var(--text-primary); background: var(--surface-3); border-color: var(--border); }
+.map-gesture { color: var(--text-muted); font-size: 0.7rem; }
+.map-caption { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; padding: 10px 18px; border-top: 1px solid var(--border-subtle); font-size: 0.68rem; color: var(--text-muted); }
+.map-caption > span:first-child { display: flex; align-items: center; gap: 7px; }
+.map-caption svg { width: 20px; height: 20px; flex-shrink: 0; }
+#map-point-count { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* The panel moves from a first point to a readable description. */
+.headpain-app .panel, .headpain-app.explain-mode .explain-panel { min-width: 0; border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--surface-1); overflow: hidden; }
+.headpain-app.explain-mode .explain-panel { overflow-y: auto; }
+.headpain-app .tabs { padding: 0 12px; gap: 8px; background: var(--surface-1); }
+.headpain-app .tab { min-height: 55px; font-size: 0.79rem; white-space: nowrap; padding: 12px 4px; }
+.headpain-app .tabpanel { padding: 24px; scroll-padding: 20px; }
+.headpain-app .tabpanel > * + * { margin-top: 24px; }
+.welcome-note h2 { margin: 0 0 8px; font-size: 1.45rem; line-height: 1.3; font-weight: 600; letter-spacing: -0.025em; }
+.welcome-note p { font-size: 0.86rem; line-height: 1.65; color: var(--text-muted); margin: 0; max-width: 55ch; }
+.welcome-steps { display: grid; gap: 16px; padding: 0; margin: 24px 0 26px; list-style: none; }
+.welcome-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.step-number { width: 26px; height: 26px; flex-shrink: 0; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 0.73rem; color: var(--text-secondary); }
+.welcome-steps li:first-child .step-number { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.welcome-steps strong { display: block; font-size: 0.83rem; font-weight: 600; }
+.welcome-steps p { font-size: 0.76rem; margin-top: 2px; }
+.quick-areas-label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.quick-areas-label h3 { margin: 0; font-size: 0.8rem; font-weight: 600; }
+.quick-areas-label span { font-size: 0.68rem; color: var(--text-muted); }
+.quick-areas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick-areas button { display: flex; align-items: center; justify-content: space-between; font: inherit; font-size: 0.79rem; min-height: 44px; padding: 9px 12px; text-align: left; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 7px; background: none; cursor: pointer; }
+.quick-areas button:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--text-primary); }
+.quick-areas button span { color: var(--text-muted); }
+.welcome-example { margin-top: 20px !important; font-size: 0.75rem !important; }
+.headpain-app .link-btn { color: var(--accent); }
+.headpain-app .empty-note { background: none; border: 0; text-align: left; padding: 8px 0; line-height: 1.6; }
+.headpain-app .editor-card { background: none; border: 0; padding: 0; border-radius: 0; }
+.headpain-app .editor-zone { flex-wrap: wrap; gap: 6px; font-size: 1.05rem; }
+.headpain-app .editor-pain { flex-basis: 100%; font-weight: 400; font-size: 0.73rem; padding-left: 21px; }
+.headpain-app .editor-desc { line-height: 1.6; }
+.headpain-app .field { margin-top: 22px; }
+.headpain-app .field-label { font-size: 0.83rem; margin-bottom: 10px; }
+.intensity-value { font-variant-numeric: tabular-nums; color: var(--accent); font-size: 0.95rem; }
+.headpain-app input[type="range"] { height: 28px; background: transparent; accent-color: var(--accent); }
+.headpain-app input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 8px; background: var(--border); }
+.headpain-app input[type="range"]::-moz-range-track { height: 6px; border-radius: 8px; background: var(--border); }
+.headpain-app input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: -9px; background: var(--accent); border: 3px solid var(--surface-1); box-shadow: 0 0 0 1px var(--accent); }
+.headpain-app input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; background: var(--accent); border: 3px solid var(--surface-1); box-shadow: 0 0 0 1px var(--accent); }
+.range-endpoints { display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.68rem; }
+.headpain-app .field-desc { font-size: 0.77rem; line-height: 1.5; }
+.headpain-app .chip { min-height: 36px; border-radius: 7px; font-size: 0.76rem; padding: 7px 10px; }
+.headpain-app .chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.headpain-app .note-input { min-height: 78px; font-size: 0.82rem; padding: 11px 12px; background: var(--bg); }
+.headpain-app .editor-actions { justify-content: space-between; padding-top: 18px; gap: 8px; }
+.headpain-app .guidance-card { margin-top: 12px; }
+.headpain-app .guidance-card summary { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--warning); }
+.point-level { white-space: nowrap; font-size: 0.8rem; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.point-select { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; min-height: 40px; appearance: none; border: 0; background: none; color: inherit; font: inherit; text-align: left; padding: 0; cursor: pointer; }
+.headpain-app .point-title, .headpain-app .point-meta { display: block; }
+.headpain-app .point-row { padding: 12px 0; border-width: 0 0 1px; border-radius: 0; background: none; gap: 10px; }
+.headpain-app .point-row.selected { background: var(--accent-soft); padding-inline: 10px; border-radius: 7px; }
+.headpain-app .point-title { font-size: 0.84rem; }
+.headpain-app .point-del { min-width: 32px; min-height: 36px; }
+.headpain-app .zone-browser { margin-top: 22px; border-color: var(--border); background: none; border-radius: 8px; }
+.headpain-app .zone-browser > summary { min-height: 44px; padding: 11px 12px; font-size: 0.8rem; }
+.zone-search-wrap { padding: 12px; }
+.zone-search-wrap label { display: block; font-size: 0.73rem; color: var(--text-muted); margin-bottom: 7px; }
+#zone-search { width: 100%; min-height: 42px; padding: 9px 12px; color: var(--text-primary); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: 0.83rem; }
+#zone-no-results { padding: 12px; }
+.headpain-app .zone-btn { min-height: 40px; font-size: 0.76rem; }
+.map-next-step { display: grid; gap: 10px; padding-top: 20px; border-top: 1px solid var(--border-subtle); }
+.map-next-step > span { color: var(--text-muted); font-size: 0.78rem; }
+.map-next-step .btn { justify-content: space-between; }
+.headpain-app .section-title { font-size: 1.15rem; font-weight: 600; }
+.headpain-app .fine-print { line-height: 1.65; }
+
+/* Diary: a useful history before backup and maintenance controls. */
+.diary-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.diary-heading h2 { margin: 0; font-size: 1.2rem; font-weight: 600; }
+.diary-current { margin: 22px 0; }
+.diary-current label { display: block; font-size: 0.76rem; font-weight: 600; margin-bottom: 7px; }
+.headpain-app .episode-rename { min-height: 44px; background: var(--bg); font-size: 0.88rem; }
+.diary-list { margin: 22px 0; }
+.headpain-app .episode-row { min-height: 72px; margin: 0; border-width: 0 0 1px; border-radius: 0; padding: 14px 10px; background: none; }
+.headpain-app .episode-row.active { background: var(--accent-soft); border-color: var(--border-subtle); }
+.episode-date { display: grid; place-items: center; gap: 0; width: 36px; flex-shrink: 0; }
+.episode-date strong { font-size: 1.25rem; line-height: 1.2; font-weight: 500; }
+.episode-date span { font-size: 0.62rem; text-transform: uppercase; color: var(--text-muted); }
+.episode-severity { text-align: right; flex-shrink: 0; }
+.episode-severity strong { font-size: 0.88rem; font-weight: 600; }
+.episode-severity span { display: block; font-size: 0.65rem; color: var(--text-muted); }
+.episode-pains { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
+.episode-pains span { font-size: 0.7rem; color: var(--text-muted); }
+.headpain-app .episode-title, .headpain-app .episode-meta { display: block; }
+.diary-tools { border-top: 1px solid var(--border-subtle); padding-top: 16px; margin-top: 20px; }
+.diary-tools summary { cursor: pointer; padding: 6px 0; font-size: 0.8rem; color: var(--text-secondary); }
+.diary-tools .btn-row { margin-top: 10px; }
+.diary-tools p { margin: 12px 0; }
+.diary-retention { font-size: 0.75rem; color: var(--text-muted); margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
+.headpain-app .explain-inner { padding: 24px; gap: 18px; }
+.headpain-app .explain-title { overflow-wrap: anywhere; font-size: 1.35rem; }
+.headpain-app .explain-card { padding: 18px 0; border-width: 1px 0 0; border-radius: 0; background: none; }
+.headpain-app .explain-card-head { flex-wrap: wrap; }
+.headpain-app .explain-card-name { overflow-wrap: anywhere; min-width: 0; }
+.explain-notes { margin-top: 16px; }
+.explain-notes h3 { margin: 0 0 8px; font-size: 0.8rem; font-weight: 600; }
+.explain-notes p { margin: 8px 0 0; font-size: 0.8rem; color: var(--text-secondary); }
+.explain-notes strong { display: block; font-size: 0.7rem; color: var(--text-muted); font-weight: 500; }
+.explain-notes span { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+.headpain-app .stage-legend { bottom: 14px; max-height: calc(100% - 78px); overflow-y: auto; pointer-events: auto; }
+.headpain-app .legend { background: var(--surface-1); backdrop-filter: none; }
+
+.share-panel { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-shrink: 0; background: var(--accent-soft); border: 1px solid var(--border); padding: 16px 20px; border-radius: 12px; margin-bottom: 16px; }
+.share-panel h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 5px; }
+.share-panel p { margin: 0; max-width: 62ch; font-size: 0.77rem; color: var(--text-secondary); }
+.share-options { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.headpain-app .disclaimer-strip { margin-top: 12px; padding: 10px 0; background: none; border: 0; font-size: 0.7rem; color: var(--text-muted); }
+.headpain-app .disclaimer-strip strong { font-weight: 500; color: var(--text-secondary); }
+.headpain-app .disclaimer-icon { background: none; border: 1px solid var(--text-muted); color: var(--text-muted); width: 15px; height: 15px; }
+.headpain-app .toast { max-width: min(560px, calc(100% - 32px)); width: max-content; border-radius: 10px; background: var(--surface-2); border-color: var(--border-strong); color: var(--text-primary); font-weight: 400; padding: 13px 18px; }
+.headpain-app.explain-mode .workspace-intro .eyebrow { color: var(--text-muted); }
+
+@media (min-width: 981px) and (max-height: 850px) {
+  .headpain-app { height: auto; min-height: 100dvh; overflow: auto; }
+  .headpain-app .app-layout { height: 620px; flex: none; }
+}
+@media (max-width: 1180px) and (min-width: 981px) {
+  .headpain-app .app-frame { padding-inline: 24px; }
+  .headpain-app .app-layout { grid-template-columns: minmax(0, 1.15fr) minmax(360px, 1fr); gap: 16px; }
+  .headpain-app .tabpanel { padding: 20px; }
+  .map-gesture { flex-basis: 100%; }
+}
+@media (max-width: 980px) {
+  .headpain-app { height: auto; min-height: 100dvh; overflow: auto; }
+  .headpain-app .app-frame { padding: 24px 20px 0; }
+  .workspace-heading { align-items: flex-start; }
+  .workspace-intro h2 { font-size: 1.7rem; }
+  .headpain-app .app-layout { display: flex; flex-direction: column; gap: 20px; }
+  .map-workspace { --mobile-map-height: 480px; height: var(--mobile-map-height); flex-shrink: 0; position: sticky; top: calc(var(--header-h-app, 56px) - 126px); z-index: 10; }
+  .headpain-app .stage { height: auto; position: relative; top: auto; z-index: auto; border-bottom: 0; }
+  .headpain-app .tabs { position: sticky; top: calc(var(--header-h-app, 56px) + 354px); z-index: 9; }
+  .headpain-app .tabpanel { overflow: visible; }
+  .headpain-app .panel { overflow: visible; }
+  .headpain-app .tabs { border-radius: 14px 14px 0 0; }
+  .headpain-app .panel, .headpain-app .explain-panel { scroll-margin-top: calc(var(--header-h-app, 56px) + 366px); }
+  .share-panel { flex-wrap: wrap; }
+  .headpain-app .stage-toolbar { top: 12px; left: 12px; right: 12px; flex-wrap: nowrap; }
+  .headpain-app .stage-toolbar .chip-btn { font-size: 0.73rem; padding: 6px 10px; }
+}
+@media (max-width: 600px) {
+  .headpain-app .app-frame { padding: 22px 12px 0; }
+  .workspace-heading { flex-direction: column; gap: 18px; margin-bottom: 18px; padding-inline: 4px; }
+  .workspace-intro h2 { font-size: 1.75rem; }
+  .workspace-intro > p:last-child { font-size: 0.79rem; margin-top: 6px; }
+  .workspace-actions { width: 100%; justify-items: stretch; gap: 9px; }
+  .storage-status { font-size: 0.7rem; }
+  .workspace-buttons .btn { flex: 1; min-height: 44px; }
+  .map-workspace { --mobile-map-height: 460px; border-radius: 12px; }
+  .headpain-app .tabs { top: calc(var(--header-h-app, 56px) + 334px); }
+  .headpain-app .panel, .headpain-app .explain-panel { scroll-margin-top: calc(var(--header-h-app, 56px) + 346px); }
+  .map-heading { padding: 14px 14px 10px; }
+  #map-episode-title { max-width: 23ch; }
+  .headpain-app .pain-bar { padding-inline: 12px; }
+  .headpain-app .pain-bar-inner { gap: 6px; }
+  .headpain-app .pain-empty { font-size: 0.7rem; }
+  .headpain-app .pain-add { font-size: 0.7rem; }
+  .headpain-app .pain-name { max-width: 13ch; }
+  .headpain-app .stage { min-height: 210px; }
+  .headpain-app .stage-toolbar { gap: 4px; top: 10px; left: 10px; right: 10px; }
+  .headpain-app .stage-toolbar .chip-btn { font-size: 0.67rem; min-height: 36px; padding: 5px 8px; }
+  .headpain-app .stage-hint { bottom: 10px; font-size: 0.68rem; padding: 6px 10px; }
+  .map-navigation { justify-content: center; padding: 9px 12px; gap: 6px; }
+  .view-presets { flex: 1; }
+  .view-presets button { flex: 1; min-height: 36px; }
+  .map-gesture { flex-basis: 100%; text-align: center; font-size: 0.63rem; }
+  .map-caption { padding: 9px 12px; font-size: 0.61rem; gap: 6px; }
+  .map-caption svg { width: 17px; }
+  .headpain-app .tabpanel, .headpain-app .explain-inner { padding: 22px 18px; }
+  .headpain-app .tabs { padding-inline: 8px; gap: 3px; }
+  .headpain-app .tab { font-size: 0.74rem; min-height: 52px; }
+  .headpain-app .chip { min-height: 42px; }
+  .headpain-app .zone-btn { min-height: 44px; }
+  .headpain-app input:not([type="range"]), .headpain-app textarea, .headpain-app select { font-size: 16px; }
+  .share-panel { padding: 16px; gap: 14px; }
+  .share-options { flex-shrink: 1; }
+  .headpain-app .disclaimer-strip { font-size: 0.67rem; align-items: flex-start; line-height: 1.6; }
+  .disclaimer-icon { margin-top: 3px; }
+  .headpain-app .stage-legend .legend { padding: 8px 10px; }
+  .headpain-app .stage-legend .legend-scale { display: none; }
+  .headpain-app .stage-legend { bottom: 8px; left: 8px; max-height: 66px; }
+  .headpain-app .stage-legend .legend-head, .headpain-app .stage-legend .legend-meta { display: none; }
+  .headpain-app .stage-legend .legend-list { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .headpain-app .stage-legend .legend-row { margin: 0; }
+  .headpain-app .stage-legend .legend-name { font-size: 0.69rem; display: block; max-width: 18ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (max-width: 980px) and (max-height: 650px) {
+  .map-workspace { position: relative; top: auto; }
+  .headpain-app .tabs { top: var(--header-h-app, 56px); }
+  .headpain-app .panel, .headpain-app .explain-panel { scroll-margin-top: calc(var(--header-h-app, 56px) + 12px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .headpain-app *, .headpain-app *::before, .headpain-app *::after { animation: none !important; scroll-behavior: auto !important; }
+}

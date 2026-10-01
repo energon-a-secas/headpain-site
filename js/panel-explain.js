@@ -35,7 +35,7 @@ function patternNote(conditionId) {
     </details>`;
 }
 
-function painCard(p) {
+function painCard(p, notes = []) {
   if (!p.count) return '';
   return `
     <div class="explain-card">
@@ -49,6 +49,7 @@ function painCard(p) {
         <strong>How bad:</strong> ${escHtml(p.prose.strength)}<br>
         ${p.prose.feels ? `<strong>What it is like:</strong> ${escHtml(p.prose.feels)}` : ''}
       </p>
+      ${notes.length ? `<div class="explain-notes"><h3>Notes</h3>${notes.map(n => `<p><strong>${escHtml(n.zone)}</strong><span>${escHtml(n.text)}</span></p>`).join('')}</div>` : ''}
       ${patternNote(p.conditionId)}
     </div>`;
 }
@@ -92,18 +93,27 @@ export function renderExplain(el, stageLegendEl, ctx) {
       <h2 class="explain-title">${escHtml(ep.title)}</h2>
       <p class="explain-sub">${model.pointCount} point${model.pointCount === 1 ? '' : 's'}
         across ${model.painCount} pain${model.painCount === 1 ? '' : 's'}</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn--primary" data-summary-share ${model.pointCount ? '' : 'disabled'}>Copy read-only link</button>
+        <button type="button" class="btn btn--secondary" data-summary-edit>Edit map</button>
+      </div>
       <p class="explain-note">${escHtml(READING_NOTE)}</p>
       ${impactCardHtml(ep)}
       ${comparePicker(model)}
       ${model.pains.length > 1 ? `
         <div class="explain-hint">Click a pain above the head to see it on its own.</div>` : ''}
-      ${model.pains.map(painCard).join('') || '<div class="empty-note">This map has no points yet.</div>'}
+      ${model.pains.map(p => painCard(p, ep.markers
+        .filter(m => m.groupId === p.id && m.note?.trim())
+        .map(m => ({ zone: ctx.registry.zoneById(m.zoneId)?.label || 'Free point', text: m.note }))
+      )).join('') || '<div class="empty-note">This map has no points yet.</div>'}
       <p class="fine-print explain-fine">
         This is a description of pain, not a diagnosis. It was written by the person who feels it.
       </p>
     </div>`;
 
   const picker = el.querySelector('#compare-with');
+  el.querySelector('[data-summary-share]').addEventListener('click', () => ctx.actions.copyShareLink({ explain: true }));
+  el.querySelector('[data-summary-edit]').addEventListener('click', () => ctx.actions.toggleExplain());
   picker?.addEventListener('change', () => {
     if (picker.value) ctx.actions.compare([picker.dataset.compareBase, picker.value]);
   });
