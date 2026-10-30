@@ -13,6 +13,13 @@
 //   4. normalize: recentre + scale so crown = +1 / chin = -1
 //   5. rasterize a 1024² zone-ID atlas through the mesh's UV unwrap
 //   6. write outputs + coverage report
+//
+// The source scan is not committed. It is three.js r160's example model
+// examples/models/gltf/LeePerrySmith/LeePerrySmith.glb (404,976 bytes,
+// SHA-256 402b8a8ac9f03232e6d64b5962929703a069daf99d3c49ac8eb0e48bedc9c576),
+// saved as assets/head-leeperrysmith.glb. A bake with js/zones.js unchanged
+// rewrites all three outputs byte for byte, which is the check that it is
+// the right file (verified 2026-10-30).
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -119,25 +126,35 @@ function probe() {
     console.log(`${y0.toFixed(2).padStart(6)} ${String(count).padStart(6)} ${maxR.toFixed(2)}  ${(sumR / count).toFixed(2)}   ${fz.toFixed(2)} (${fzx.toFixed(2)})  ${bz.toFixed(2)}  ${sx.toFixed(2)}`);
   }
 
+  // Landmarks for authoring hints, each found from the nose tip, the face's
+  // most forward point. Fixed y windows used to stand here, and each caught
+  // the feature below the one it named ("brow" found the nose tip, "nose
+  // tip" the upper lip), so every face hint authored from them sat one
+  // feature low until 2026-10-30.
+  const at = i => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
   const pick = (label, pred, score) => {
     let best = null, bs = -1e9;
     for (let i = 0; i < nv; i++) {
-      const p = [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]];
+      const p = at(i);
       if (!pred(p)) continue;
       const s = score(p);
       if (s > bs) { bs = s; best = p; }
     }
-    console.log(`${label.padStart(14)} [${best.map(v => v.toFixed(2)).join(', ')}]`);
+    console.log(`${label.padStart(16)} [${best.map(v => v.toFixed(2)).join(', ')}]`);
+    return best;
   };
-  console.log('\nlandmarks:');
-  pick('nose tip', p => Math.abs(p[0]) < 0.4 && p[1] > -0.6 && p[1] < 0.9, p => p[2]);
-  pick('brow', p => Math.abs(p[0]) < 0.6 && p[1] > 0.8 && p[1] < 1.6, p => p[2]);
+  console.log('\nlandmarks (raw):');
+  const midline = p => Math.abs(p[0] + 0.09) < 0.15;
+  const tip = pick('nose tip', p => midline(p) && p[1] > -1 && p[1] < 3, p => p[2]);
+  const face = p => midline(p) && p[2] > tip[2] - 0.8;
+  const gap = pick('between the eyes', p => face(p) && p[1] > tip[1] + 0.5 && p[1] < tip[1] + 1.1, p => -p[2]);
+  pick('brow', p => face(p) && p[1] > gap[1] && p[1] < gap[1] + 0.6, p => p[2]);
+  pick('upper lip', p => face(p) && p[1] > tip[1] - 0.8 && p[1] < tip[1] - 0.3, p => p[2]);
+  pick('chin point', p => face(p) && p[1] > tip[1] - 1.6 && p[1] < tip[1] - 1.0, p => p[2]);
   pick('crown', () => true, p => p[1]);
-  pick('chin', p => p[2] > 0.5 && Math.abs(p[0]) < 0.6, p => -p[1]);
-  pick('ear L (+x)', p => p[1] > -0.4 && p[1] < 0.9 && p[2] > -0.6 && p[2] < 0.6, p => p[0]);
-  pick('ear R (-x)', p => p[1] > -0.4 && p[1] < 0.9 && p[2] > -0.6 && p[2] < 0.6, p => -p[0]);
-  pick('back skull', p => p[1] > 0.5 && p[1] < 1.8, p => -p[2]);
-  pick('lips', p => Math.abs(p[0]) < 0.35 && p[1] > -0.7 && p[1] < -0.1, p => p[2]);
+  pick('ear L (+x)', p => p[1] > tip[1] - 0.4 && p[1] < tip[1] + 1.1 && p[2] > -0.6 && p[2] < 0.6, p => p[0]);
+  pick('ear R (-x)', p => p[1] > tip[1] - 0.4 && p[1] < tip[1] + 1.1 && p[2] > -0.6 && p[2] < 0.6, p => -p[0]);
+  pick('back skull', p => p[1] > 0.5 && p[1] < 2.5, p => -p[2]);
 }
 
 // ---------------------------------------------------------------------------
@@ -203,13 +220,19 @@ function bake() {
 
   // 2. snap authored hints onto kept verts (raw space), build final zone list
   //    (+x = patient left; mirror twins get x negated)
+  // Twins mirror across the face's own midline (the mean x of the kept
+  // vertices, about -0.09), not across x = 0, which put every right zone
+  // 0.18 off its left twin's mirror image.
+  let midX = 0, midN = 0;
+  for (let i = 0; i < nv; i++) if (usedVert[i]) { midX += pos[i * 3]; midN++; }
+  midX /= midN;
   const zones = [];
   for (const z of ZONES) {
     const variants = z.mirror
       ? [{ suffix: 'left', sx: 1 }, { suffix: 'right', sx: -1 }]
       : [{ suffix: null, sx: 1 }];
     for (const v of variants) {
-      const hint = [z.hint[0] * v.sx, z.hint[1], z.hint[2]];
+      const hint = [v.sx === 1 ? z.hint[0] : 2 * midX - z.hint[0], z.hint[1], z.hint[2]];
       let best = -1, bd = Infinity;
       for (let i = 0; i < nv; i++) {
         if (!usedVert[i]) continue;

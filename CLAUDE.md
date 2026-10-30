@@ -176,6 +176,17 @@ against a stub.
   point editor and every zone-browser tooltip render empty, which is how they
   shipped until 2026-09-05. If you add a zone description, put it in `js/zones.js`
   and do not re-bake expecting it to appear.
+- **Re-baking the zones needs the source scan, which is not committed.** It is
+  three.js r160's `LeePerrySmith.glb`; `tools/bake-zones.mjs` gives its path,
+  size and SHA-256, and a bake with `js/zones.js` unchanged rewrites all three
+  assets byte for byte, which proves it is the right file. Until 2026-10-30 the
+  probe's landmark windows each caught the feature below the one they named
+  ("brow" was the nose tip), so every face and ear zone sat one feature low: the
+  eye zone on the cheek, the bridge on the upper lip, the temple in front of the
+  ear lobe. The probe now finds each landmark from the nose tip, twins mirror
+  across the face's midline rather than x = 0, and `tests/zones-anatomy.test.mjs`
+  fails if a zone leaves the side of the nose tip, chin or ear its name puts it
+  on. Run it after any hint edit; the other suites only check ids and labels.
 - **`base64UrlDecode` returns `null` on malformed input, it does not throw.**
   `atob` refuses any base64 whose length is 1 mod 4, which is what a share link
   losing a character to a chat client's line wrap looks like. Callers pass the

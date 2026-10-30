@@ -22,7 +22,7 @@ import { GROUP_COLOR_NAMES, colorName } from '../js/groups.js';
 import { PATTERNS, isPattern, patternLabel } from '../js/patterns.js';
 import { episodeFromCondition, episodeFromDemo, conditionById } from '../js/presets.js';
 
-// The bake contract (tools/bake-zones.mjs:227-234): a mirror:true entry becomes
+// The bake contract (tools/bake-zones.mjs:256-259): a mirror:true entry becomes
 // a -left/-right pair whose label gains an (L)/(R) suffix, anything else keeps
 // its authored id and label verbatim, which is why the authored id already
 // carries "-center" where the author wanted one. Restated here so the expected

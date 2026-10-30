@@ -1,11 +1,14 @@
 // HeadPain zone catalog — single source of truth for surface zones and pain attributes.
 //
 // Authoring format (consumed by tools/bake-zones.mjs):
-//   hint     — rough 3D point in RAW GLB coordinates, snapped onto the mesh at bake time
-//   tangent  — preferred along-surface direction for the patch's U axis
-//   extents  — [ru, rv] ellipse radii in raw units (bake scales them with the model)
-//   mirror   — auto-generate the -right twin by negating x (+x = patient LEFT)
-//   priority — tie-break when patches overlap (higher wins)
+//   hint     : rough 3D point in RAW GLB coordinates, snapped onto the mesh at bake time
+//              (face hints sit on the landmarks `node tools/bake-zones.mjs probe` prints;
+//              tests/zones-anatomy.test.mjs holds them there)
+//   tangent  : preferred along-surface direction for the patch's U axis
+//   extents  : [ru, rv] ellipse radii in raw units (bake scales them with the model)
+//   mirror   : auto-generate the -right twin by reflecting x across the face's
+//              midline (x ≈ -0.09, the mean x of the kept vertices; +x = patient LEFT)
+//   priority : tie-break when patches overlap (higher wins)
 //
 // Runtime geometry (anchors/normals/tangent frames) lives in assets/zones.baked.json;
 // this file provides ids, labels, groups, descriptions, and attribute metadata.
@@ -13,63 +16,63 @@
 export const ZONES = [
   // ── Forehead (3 cols × 2 rows) ──────────────────────────────────────────
   { id: 'forehead-upper', label: 'Upper forehead', group: 'forehead', mirror: true,
-    hint: [0.75, 1.95, 2.1], tangent: [1, 0, 0], extents: [0.55, 0.5],
+    hint: [0.64, 2.88, 1.82], tangent: [1, 0, 0], extents: [0.55, 0.5],
     desc: 'Top of the forehead, below the hairline.' },
   { id: 'forehead-upper-center', label: 'Upper forehead (center)', group: 'forehead',
-    hint: [-0.1, 1.95, 2.15], tangent: [1, 0, 0], extents: [0.5, 0.5],
+    hint: [-0.12, 2.97, 2.02], tangent: [1, 0, 0], extents: [0.5, 0.5],
     desc: 'Top-middle of the forehead.' },
   { id: 'forehead-lower', label: 'Lower forehead', group: 'forehead', mirror: true,
-    hint: [0.75, 1.35, 2.4], tangent: [1, 0, 0], extents: [0.5, 0.38],
+    hint: [0.6, 2.34, 1.99], tangent: [1, 0, 0], extents: [0.5, 0.38],
     desc: 'Just above the eyebrow.' },
   { id: 'forehead-lower-center', label: 'Lower forehead (center)', group: 'forehead',
-    hint: [-0.1, 1.35, 2.45], tangent: [1, 0, 0], extents: [0.42, 0.38],
+    hint: [-0.14, 2.35, 2.16], tangent: [1, 0, 0], extents: [0.42, 0.38],
     desc: 'Between / just above the eyebrows.' },
 
   // ── Temples & eyes ──────────────────────────────────────────────────────
   { id: 'temple', label: 'Temple', group: 'eye', mirror: true,
-    hint: [1.7, 1.0, 0.85], tangent: [0, 1, 0], extents: [0.42, 0.5],
+    hint: [1.2, 1.83, 1.09], tangent: [0, 1, 0], extents: [0.42, 0.5],
     desc: 'The flat soft spot beside the eye.' },
   { id: 'behind-eye', label: 'Behind / around eye', group: 'eye', mirror: true,
-    hint: [0.65, 0.85, 2.25], tangent: [1, 0, 0], extents: [0.32, 0.3],
+    hint: [0.59, 1.76, 1.94], tangent: [1, 0, 0], extents: [0.32, 0.3],
     desc: 'Pain felt deep inside or behind the eyeball.' },
 
   // ── Nose & sinuses ──────────────────────────────────────────────────────
   { id: 'sinus-frontal', label: 'Frontal sinus', group: 'nose-sinus', mirror: true, priority: 2,
-    hint: [0.45, 1.3, 2.35], tangent: [1, 0, 0], extents: [0.28, 0.24],
+    hint: [0.23, 2.2, 2.19], tangent: [1, 0, 0], extents: [0.28, 0.24],
     desc: 'Above the inner part of the eyebrow.' },
   { id: 'sinus-ethmoid', label: 'Between the eyes', group: 'nose-sinus', priority: 3,
-    hint: [-0.1, 0.9, 2.25], tangent: [1, 0, 0], extents: [0.2, 0.22],
+    hint: [-0.11, 1.81, 2.14], tangent: [1, 0, 0], extents: [0.2, 0.22],
     desc: 'The narrow gap between the eyes.' },
   { id: 'nose-bridge', label: 'Bridge of nose', group: 'nose-sinus', priority: 1,
-    hint: [-0.1, 0.55, 2.35], tangent: [0, 1, 0], extents: [0.2, 0.3],
+    hint: [-0.1, 1.42, 2.4], tangent: [1, 0, 0], extents: [0.2, 0.3],
     desc: 'The bony ridge of the nose.' },
   { id: 'sinus-maxillary', label: 'Maxillary sinus', group: 'nose-sinus', mirror: true, priority: 1,
-    hint: [0.75, 0.1, 1.85], tangent: [1, 0, 0], extents: [0.35, 0.3],
+    hint: [0.52, 1.31, 1.87], tangent: [1, 0, 0], extents: [0.35, 0.3],
     desc: 'Under the eye, beside the nose, over the cheekbone hollow.' },
 
   // ── Face & jaw ──────────────────────────────────────────────────────────
   { id: 'cheek', label: 'Cheek', group: 'face-jaw', mirror: true,
-    hint: [1.25, 0.0, 1.35], tangent: [1, 0, 0], extents: [0.42, 0.4],
+    hint: [0.9, 1.02, 1.69], tangent: [1, 0, 0], extents: [0.42, 0.4],
     desc: 'The fleshy part of the cheek.' },
   { id: 'tmj', label: 'Jaw joint (TMJ)', group: 'face-jaw', mirror: true, priority: 1,
-    hint: [1.45, 0.45, 0.45], tangent: [0, 1, 0], extents: [0.3, 0.3],
+    hint: [1.28, 1.26, 0.69], tangent: [0, 1, 0], extents: [0.3, 0.3],
     desc: 'Right in front of the ear, where the jaw hinges.' },
   { id: 'jaw-angle', label: 'Angle of jaw', group: 'face-jaw', mirror: true,
-    hint: [1.15, -0.6, 0.35], tangent: [1, 0, 0], extents: [0.38, 0.35],
+    hint: [1.1, 0.27, 0.38], tangent: [1, 0, 0], extents: [0.38, 0.35],
     desc: 'The back-bottom corner of the jaw.' },
   { id: 'chin', label: 'Chin', group: 'face-jaw',
-    hint: [-0.1, -0.7, 2.0], tangent: [1, 0, 0], extents: [0.35, 0.3],
+    hint: [-0.14, -0.11, 2.26], tangent: [1, 0, 0], extents: [0.35, 0.3],
     desc: 'The point of the chin.' },
   { id: 'upper-teeth', label: 'Upper teeth / gums', group: 'face-jaw', mirror: true, priority: 1,
-    hint: [0.35, -0.25, 2.15], tangent: [1, 0, 0], extents: [0.28, 0.18],
+    hint: [0.19, 0.64, 2.23], tangent: [1, 0, 0], extents: [0.28, 0.18],
     desc: 'Upper teeth or the gum above them.' },
 
   // ── Ears ────────────────────────────────────────────────────────────────
   { id: 'ear', label: 'In / around ear', group: 'ear', mirror: true, priority: 2,
-    hint: [1.65, 0.85, 0.05], tangent: [0, 1, 0], extents: [0.3, 0.4],
+    hint: [1.64, 1.29, 0.02], tangent: [0, 1, 0], extents: [0.65, 0.32],
     desc: 'Inside the ear canal or the ear itself.' },
   { id: 'mastoid', label: 'Behind ear (mastoid)', group: 'ear', mirror: true, priority: 1,
-    hint: [1.5, 0.3, -0.6], tangent: [0, 1, 0], extents: [0.3, 0.3],
+    hint: [1.22, 0.87, -0.46], tangent: [0, 1, 0], extents: [0.3, 0.3],
     desc: 'The hard bump of bone just behind the ear.' },
 
   // ── Top of head ─────────────────────────────────────────────────────────
@@ -85,24 +88,24 @@ export const ZONES = [
 
   // ── Back of head ────────────────────────────────────────────────────────
   { id: 'occipital-upper', label: 'Back of head, upper', group: 'scalp-back', mirror: true,
-    hint: [0.85, 1.8, -1.7], tangent: [1, 0, 0], extents: [0.55, 0.5],
+    hint: [0.65, 2.41, -1.82], tangent: [1, 0, 0], extents: [0.55, 0.5],
     desc: 'Back of the head, upper quarter.' },
   { id: 'occipital-upper-center', label: 'Back of head, upper (center)', group: 'scalp-back',
-    hint: [-0.1, 1.8, -1.95], tangent: [1, 0, 0], extents: [0.5, 0.5],
+    hint: [-0.07, 2.39, -1.97], tangent: [1, 0, 0], extents: [0.5, 0.5],
     desc: 'Back of the head, upper middle.' },
   { id: 'occipital-lower', label: 'Back of head, lower', group: 'scalp-back', mirror: true,
-    hint: [0.8, 0.8, -1.55], tangent: [1, 0, 0], extents: [0.5, 0.45],
+    hint: [0.62, 1.46, -1.75], tangent: [1, 0, 0], extents: [0.5, 0.45],
     desc: 'Back of the head, lower, just above the neck.' },
   { id: 'occipital-lower-center', label: 'Back of head, lower (center)', group: 'scalp-back',
-    hint: [-0.1, 0.85, -1.75], tangent: [1, 0, 0], extents: [0.45, 0.45],
+    hint: [-0.09, 1.42, -1.89], tangent: [1, 0, 0], extents: [0.45, 0.45],
     desc: 'Back of the head, lower middle, just above the neck.' },
   { id: 'suboccipital', label: 'Where skull meets neck', group: 'scalp-back', mirror: true, priority: 1,
-    hint: [0.7, -0.2, -1.3], tangent: [1, 0, 0], extents: [0.4, 0.35],
+    hint: [0.43, 0.8, -1.46], tangent: [1, 0, 0], extents: [0.4, 0.35],
     desc: 'The hollow where the back of the skull joins the neck.' },
 
   // ── Neck ────────────────────────────────────────────────────────────────
   { id: 'neck-back-upper', label: 'Back of neck, upper', group: 'neck',
-    hint: [-0.1, -1.1, -1.6], tangent: [1, 0, 0], extents: [0.5, 0.4],
+    hint: [-0.05, 0.09, -1.32], tangent: [1, 0, 0], extents: [0.5, 0.4],
     desc: 'The upper back of the neck, just below the skull.' },
   { id: 'neck-back-mid', label: 'Back of neck, middle', group: 'neck',
     hint: [-0.1, -1.6, -1.85], tangent: [1, 0, 0], extents: [0.45, 0.38],
