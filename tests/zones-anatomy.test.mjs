@@ -101,3 +101,19 @@ test('every left zone and its right twin mirror each other across the midline', 
   }
   assert.deepEqual(off, [], 'twins mirrored across x = 0 rather than the face midline land beside each other');
 });
+
+test('every right twin takes its left twin\'s frame, mirrored, so a tap and its mirror get mirrored names', () => {
+  // Each twin used to take the normal of its own snapped vertex. The two ears'
+  // normals differed enough that the left canal read "Jaw joint" and the right
+  // one "In / around ear".
+  const mirrored = a => [-a[0], a[1], a[2]];
+  const off = [];
+  for (const left of baked.zones.filter(z => z.side === 'left')) {
+    const right = baked.zones.find(z => z.id === left.id.replace(/-left$/, '-right'));
+    for (const key of ['normal', 'u']) {
+      const gap = Math.max(...mirrored(left[key]).map((c, i) => Math.abs(c - right[key][i])));
+      if (gap > 1e-9) off.push(`${left.baseId}.${key} differs by ${gap.toExponential(2)}`);
+    }
+  }
+  assert.deepEqual(off, []);
+});

@@ -241,10 +241,20 @@ function bake() {
       }
       if (best < 0) throw new Error(`no kept vertex near hint for ${z.id}`);
       const anchor = [pos[best * 3], pos[best * 3 + 1], pos[best * 3 + 2]];
-      const n = norm([nrm[best * 3], nrm[best * 3 + 1], nrm[best * 3 + 2]]);
-      const tHint = norm([z.tangent[0] * v.sx, z.tangent[1], z.tangent[2]]);
-      let u = sub(tHint, n.map(c => c * dot(tHint, n)));
-      u = len(u) < 1e-4 ? norm(cross(n, [0, 1, 0])) : norm(u);
+      // A right twin takes its left twin's frame, mirrored, so the two
+      // ellipses are mirror images even where the scan is not (the snapped
+      // vertex normals of the two ears differed enough to move the canal).
+      const twin = v.sx === -1 ? zones[zones.length - 1] : null;
+      let n, u;
+      if (twin) {
+        n = [-twin.normal[0], twin.normal[1], twin.normal[2]];
+        u = [-twin.u[0], twin.u[1], twin.u[2]];
+      } else {
+        n = norm([nrm[best * 3], nrm[best * 3 + 1], nrm[best * 3 + 2]]);
+        const tHint = norm(z.tangent);
+        u = sub(tHint, n.map(c => c * dot(tHint, n)));
+        u = len(u) < 1e-4 ? norm(cross(n, [0, 1, 0])) : norm(u);
+      }
       const w = norm(cross(n, u));
       // No `desc` here on purpose. This file bakes geometry; js/zones.js owns
       // the words, and buildRegistry() merges them back on by baseId at load.
