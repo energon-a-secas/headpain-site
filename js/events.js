@@ -14,7 +14,7 @@ import {
 } from './persist.js';
 import { CONDITIONS, presetMarkers } from './conditions.js';
 import { DEMOS } from './demos.js';
-import { WHOLE_HEAD_SPOT, materializeSpots as spotsFor, shortName,
+import { wholeHeadSpot, materializeSpots as spotsFor, shortName,
   episodeFromCondition, episodeFromDemo, episodeFromComparison } from './presets.js';
 import { renderAll } from './render.js';
 import { renderZoneBrowser } from './editor.js';
@@ -55,7 +55,7 @@ export function initApp(ctx) {
   ctx.toast = toast;
 
   function mutate(fn) {
-    absorbShared();
+    absorbShared(registry);
     fn();
     saveToStorage();
     renderAll(ctx);
@@ -84,7 +84,7 @@ export function initApp(ctx) {
 
     updateSelected(patch, opts = {}) {
       if (!state.selectedMarkerId) return;
-      absorbShared();
+      absorbShared(registry);
       updateMarker(state.selectedMarkerId, patch);
       saveToStorage();
       renderStorageStatus();
@@ -113,10 +113,10 @@ export function initApp(ctx) {
     addPointForZone(zoneId) {
       const zone = registry.zoneById(zoneId);
       if (!zone) return;
-      // Copied here as well as in defaultMarker: handing out the module constant
+      // Copied here as well as in defaultMarker: handing out a shared array
       // is what went wrong, and the copy costs nothing next to placing a point.
       const spot = zone.virtual
-        ? { p: [...WHOLE_HEAD_SPOT.p], n: [...WHOLE_HEAD_SPOT.n] }
+        ? wholeHeadSpot(registry)
         : { p: [...zone.anchor], n: [...zone.normal] };
       mutate(() => {
         ensurePainForPlacement();
@@ -279,7 +279,7 @@ export function initApp(ctx) {
 
     loadEpisode(id) {
       if (!loadEpisodeState(id)) return;
-      absorbShared();
+      absorbShared(registry);
       saveToStorage();
       const ep = activeEpisode();
       head.setCamera(ep.camera.theta, ep.camera.phi, ep.camera.dist);
@@ -293,7 +293,7 @@ export function initApp(ctx) {
     },
 
     renameEpisode(id, title, { render = true } = {}) {
-      absorbShared();
+      absorbShared(registry);
       renameEpisode(id, title);
       saveToStorage();
       if (render) renderAll(ctx);
@@ -339,9 +339,9 @@ export function initApp(ctx) {
     importFile(file) {
       file.text().then(text => {
         const payload = safeJsonParse(text, null);
-        const count = payload ? importJson(payload) : 0;
+        const count = payload ? importJson(payload, registry) : 0;
         if (!count) { toast('No HeadPain episodes found in that file'); return; }
-        absorbShared();
+        absorbShared(registry);
         saveToStorage();
         renderAll(ctx);
         toast(`Imported ${count} episode${count === 1 ? '' : 's'}`);
@@ -350,7 +350,7 @@ export function initApp(ctx) {
 
     toggleXray() {
       const on = state.view !== 'xray';
-      absorbShared();
+      absorbShared(registry);
       setView(on ? 'xray' : 'normal');
       saveToStorage();
       head.setXray(on);

@@ -56,7 +56,7 @@ function episodeFromParams(registry) {
   const raw = flag('map') || (location.hash.match(/m=([A-Za-z0-9_-]+)/) || [])[1];
   if (raw) {
     const payload = safeJsonParse(base64UrlDecode(raw), null);
-    const ep = payload && episodeFromUrlPayload(payload, registry.zoneIdAt);
+    const ep = payload && episodeFromUrlPayload(payload, registry);
     if (ep) return ep;
   }
   if (flag('demo')) return episodeFromDemo(flag('demo'), registry);

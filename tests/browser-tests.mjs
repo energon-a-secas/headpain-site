@@ -1,6 +1,8 @@
 // The browser integration suite. See browser.mjs for the tiny framework.
 
 import { group, it, assert, boot, until, wait, finish } from './browser.mjs';
+import { PRE_FIX_LINKS } from './prefix-links.mjs';
+import { base64UrlDecode } from '../js/utils.js';
 
 const APP = '../index.html';
 const EMBED = '../embed.html';
@@ -655,6 +657,138 @@ await it('a barred glyph on the back of the neck sits the same way up as one on 
       `seen from behind, the neck glyph is turned ${turn(back.across, front.across).toFixed(1)}° from the forehead one ` +
       `(across ${back.across.toFixed(1)}° vs ${front.across.toFixed(1)}°, up ${back.up.toFixed(1)}° vs ${front.up.toFixed(1)}°)`);
   }, ['forehead-upper-center', 'neck-back-upper']);
+});
+
+// ── Maps saved before the 2026-10-30 zone fix ───────────────────────────────
+group('maps saved before the zone fix');
+
+// A ray onto the head the iframe drew, from off the surface along -n, read two
+// ways: the zone index the shader tints there (the atlas under the hit, 0 in a
+// gap, and about half the surface is gap), and the name a tap there gets
+// (zoneAt, which falls back to the nearest patch in a gap).
+async function headProbe(ctx) {
+  const THREE = await ctx.win.eval("import('three')");
+  const { majoritySample, zoneAt } = await ctx.win.eval("import('/js/zone-lookup.js')");
+  const { registry, head } = ctx.win.__headmap;
+  const { headMesh, lut } = head.debugScene();
+  const ray = new THREE.Raycaster();
+  const hitAt = (p, n, off) => {
+    const normal = new THREE.Vector3(...n).normalize();
+    ray.set(new THREE.Vector3(...p).addScaledVector(normal, off), normal.clone().negate());
+    return ray.intersectObject(headMesh, false)[0] || null;
+  };
+  return {
+    // Starts further out: a decal's centre is the mean of vertices bent round
+    // the head, so it sits under the surface.
+    tint: (p, n) => { const h = hitAt(p, n, 0.25); return h ? majoritySample(lut, registry.atlasSize, h.uv.x, h.uv.y) : 0; },
+    // A tap is on the surface; close, because a longer ray from the ear canal
+    // lands on the helix.
+    tapNames: (p, n) => { const h = hitAt(p, n, 0.05); return h ? zoneAt(lut, registry.atlasSize, registry.zones, h.uv, h.point)?.id ?? null : null; }
+  };
+}
+
+// Where the decal really is: the mean of the core decal's clipped vertices.
+function decalCentre(L, marker) {
+  const key = [...L.bodies.keys()].find(k => k.startsWith(marker.id + '|'));
+  const body = L.bodies.get(key);
+  const mesh = body.root.children.find(c => c.material === body.coreMat);
+  const pos = mesh.geometry.attributes.position, v = mesh.position.clone(), sum = [0, 0, 0];
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+    sum[0] += v.x; sum[1] += v.y; sum[2] += v.z;
+  }
+  return sum.map(c => c / pos.count);
+}
+
+// Points placed by name whose decal is not on their own zone's tint.
+async function decalsOffTint(ctx, markers) {
+  const { registry, head } = ctx.win.__headmap;
+  const probe = await headProbe(ctx), L = head.debugMarkerLayer();
+  return markers
+    .filter(m => probe.tint(decalCentre(L, m), m.n) !== registry.zoneIndexOf(m.zoneId))
+    .map(m => `${m.zoneId} sits on ${registry.zoneIdAt(probe.tint(decalCentre(L, m), m.n)) || 'no tint'}`);
+}
+
+await it('a link shared before the fix opens with each decal inside its zone tint', async () => {
+  localStorage.removeItem('headmap-v2');
+  const ctx = await boot(`${APP}#m=${PRE_FIX_LINKS.demoMigraine}`);
+  try {
+    await appReady(ctx);
+    assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
+    const raw = JSON.parse(base64UrlDecode(PRE_FIX_LINKS.demoMigraine));
+    const markers = activeEp(ctx).markers;
+    assert.equal(markers.length, raw.m.length, 'points were lost on the way in');
+    const off = await decalsOffTint(ctx, markers);
+    assert.deepEqual(off, [], `a decal placed by name sits off its zone tint: ${off.join(', ')}`);
+    // Not vacuous: where f8a39c1 put them, these points sit on other tints.
+    const probe = await headProbe(ctx);
+    const offBefore = raw.m.filter(r => probe.tint(r.slice(1, 4), r.slice(4, 7)) !== r[0]).length;
+    assert.gt(offBefore, 4, `only ${offBefore} of ${raw.m.length} pre-fix points were off their tint`);
+  } finally { ctx.destroy(); restoreDiary(); }
+});
+
+await it('a tap shared before the fix keeps its place and takes the name a tap there gets today', async () => {
+  localStorage.removeItem('headmap-v2');
+  const ctx = await boot(`${APP}#m=${PRE_FIX_LINKS.taps}`);
+  try {
+    await appReady(ctx);
+    assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
+    const { registry } = ctx.win.__headmap;
+    const raw = JSON.parse(base64UrlDecode(PRE_FIX_LINKS.taps));
+    const probe = await headProbe(ctx);
+    const markers = activeEp(ctx).markers;
+    const taps = markers.filter(m => m.zoneId !== 'whole-head');
+    assert.deepEqual(taps.map(m => m.zoneId), ['cheek-left', 'ear-left', 'nose-bridge', 'neck-back-upper']);
+    taps.forEach((m, i) => {
+      assert.deepEqual([[...m.p], [...m.n]], [raw.m[i].slice(1, 4), raw.m[i].slice(4, 7)], `"${m.note}" moved`);
+      assert.equal(probe.tapNames(m.p, m.n), m.zoneId, `a tap where "${m.note}" sits is not named ${m.zoneId}`);
+    });
+    const whole = markers.find(m => m.zoneId === 'whole-head');
+    assert.deepEqual([...whole.p], [...registry.zoneById('forehead-upper-center').anchor],
+      'the whole-head point stayed on the old spot on the brow ridge');
+  } finally { ctx.destroy(); restoreDiary(); }
+});
+
+await it('a diary stored before the fix is migrated on boot and saved with zonesVersion', async () => {
+  const marker = (id, zoneId, p, n) => ({ id, zoneId, p, n, intensity: 7, depth: 'surface', spread: 'small', note: '', groupId: 'g' });
+  localStorage.setItem('headmap-v2', JSON.stringify({
+    v: 2, episodes: [{ id: 'old', title: 'Old', createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z', camera: { theta: 0, phi: 1.57, dist: 4.9 },
+      groups: [{ id: 'g', name: 'Migraine', color: '#f43f5e', pattern: 'solid' }],
+      markers: [
+        // behind-eye-left on f8a39c1's anchor, and the cheekbone tap f8a39c1 named Lower forehead
+        marker('m1', 'behind-eye-left', [0.2636006658728292, -0.2919474581140325, 0.7820591713154419],
+          [0.3744081157943613, 0.12494513324652377, 0.9188075296302946]),
+        marker('m2', 'forehead-lower-left', [0.419, -0.1, 0.639], [0.612, 0.283, 0.738])
+      ] }],
+    activeEpisodeId: 'old', view: 'normal'
+  }));
+  const ctx = await boot(APP);
+  try {
+    await appReady(ctx);
+    assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
+    const [byName, tapped] = activeEp(ctx).markers;
+    assert.deepEqual([byName.zoneId, tapped.zoneId], ['behind-eye-left', 'cheek-left']);
+    assert.deepEqual(await decalsOffTint(ctx, [byName]), []);
+    assert.equal((await headProbe(ctx)).tapNames(tapped.p, tapped.n), 'cheek-left');
+    const stored = JSON.parse(localStorage.getItem('headmap-v2'));
+    assert.equal(stored.zonesVersion, 2, 'the migrated diary was not written back, so every boot migrates it again');
+    assert.equal(stored.episodes[0].markers[1].zoneId, 'cheek-left');
+  } finally { ctx.destroy(); restoreDiary(); }
+});
+
+await it('the embed opens a pre-fix map= link under the names the zones give it today', async () => {
+  const ctx = await boot(`${EMBED}?legend=full&map=${PRE_FIX_LINKS.taps}`, { width: 800, height: 520 });
+  try {
+    await embedReady(ctx);
+    assert.equal(ctx.errors.length, 0, `console errors: ${ctx.errors.join(' | ')}`);
+    const text = ctx.doc.querySelector('#embed-legend').textContent;
+    assert.includes(text, 'Cheek (left)', 'the cheekbone tap did not take the name the zones give it today');
+    assert.includes(text, 'In / around ear (left)');
+    for (const old of ['Lower forehead', 'Jaw joint']) {
+      assert.ok(!text.includes(old), `the legend still says "${old}", the name f8a39c1's atlas gave a tap`);
+    }
+  } finally { ctx.destroy(); }
 });
 
 // ── Comparing two patterns ──────────────────────────────────────────────────

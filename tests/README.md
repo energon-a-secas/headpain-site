@@ -28,6 +28,12 @@ through `buildRegistry`. Zone ids are the one thing here that fails silently:
 `materializeSpots` drops a marker whose zone the model does not carry, so a test
 written against an invented zone id passes while the app renders nothing.
 
+`tests/head-mesh.mjs` decodes `assets/head-cropped.glb` and the zone atlas and
+raycasts the way three does, so `zones-taps` and `migrate` ask what a tap names
+on the real head. `tests/prefix-links.mjs` holds two share links minted by
+f8a39c1, the last commit before the 2026-10-30 zone fix; the browser suite loads
+it too.
+
 One gotcha worth knowing: Node 22 and later already define `globalThis.localStorage`,
 but it is inert without `--localstorage-file` (`setItem is not a function`). The
 shim therefore *overwrites* it rather than deferring to it, and probes it at import

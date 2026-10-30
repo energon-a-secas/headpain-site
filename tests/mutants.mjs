@@ -36,7 +36,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 // A silent shrink is the failure this harness exists to prevent, so it refuses
 // to run as a smaller gate than it was built to be. Raise this with the list.
-const EXPECTED_MUTANTS = 35;
+const EXPECTED_MUTANTS = 49;
 
 const MUTANTS = [
   {
@@ -297,6 +297,108 @@ const MUTANTS = [
     why: 'names the zone after the one tapped, so every tap reads a neighbour',
     find: '    if (index > 0) zone = zones[index - 1] || null;',
     replace: '    if (index > 0) zone = zones[index] || null;',
+  },
+
+  // ── Maps saved before the 2026-10-30 zone fix ────────────────────────────
+  // js/migrate.js moves them into the current frame on every way in, and only
+  // them. tests/migrate.test.mjs opens real links minted by f8a39c1.
+  {
+    id: 'old-link-not-migrated',
+    file: 'js/persist.js',
+    why: 'opens a pre-fix link as saved: the eye\'s point on the cheek, under the eye\'s tint',
+    find: '  return payload.v === 2 ? migrateEpisode(ep, registry) : ep;',
+    replace: '  return ep;',
+  },
+  {
+    id: 'every-link-migrated',
+    file: 'js/persist.js',
+    why: 'migrates a link written after the fix, moving points the sender put where they are',
+    find: '  return payload.v === 2 ? migrateEpisode(ep, registry) : ep;',
+    replace: '  return migrateEpisode(ep, registry);',
+  },
+  {
+    id: 'link-written-as-v2',
+    file: 'js/persist.js',
+    why: 'writes today\'s links as v 2, so every one is migrated again when it is opened',
+    find: '    v: LINK_VERSION,',
+    replace: '    v: 2,',
+  },
+  {
+    id: 'diary-migrated-on-every-load',
+    file: 'js/persist.js',
+    why: 'migrates a diary saved after the fix, renaming taps the person made since',
+    find: '  const preFix = isPreFix(payload);\n  if (preFix) episodes.forEach',
+    replace: '  const preFix = true;\n  if (preFix) episodes.forEach',
+  },
+  {
+    id: 'diary-saved-unstamped',
+    file: 'js/persist.js',
+    why: 'saves the diary without zonesVersion, so the next load migrates it again',
+    find: '      v: 2,\n      zonesVersion: ZONES_VERSION,\n      episodes: state.episodes,',
+    replace: '      v: 2,\n      episodes: state.episodes,',
+  },
+  {
+    id: 'import-never-migrates',
+    file: 'js/persist.js',
+    why: 'imports a backup from before the fix with every point placed by name on its old anchor',
+    find: '  const preFix = isPreFix(payload);\n  let imported = 0;',
+    replace: '  const preFix = false;\n  let imported = 0;',
+  },
+  {
+    id: 'absorb-skips-migration',
+    file: 'js/persist.js',
+    why: 'merges a pre-fix diary back under a shared map unmigrated, then saves it stamped as current',
+    find: '  if (restored.length && isPreFix(stored)) restored.forEach(ep => migrateEpisode(ep, registry));',
+    replace: '',
+  },
+  {
+    id: 'tap-keeps-pre-fix-name',
+    file: 'js/migrate.js',
+    why: 'leaves a tapped cheekbone named Lower forehead',
+    find: '  m.zoneId = named.id;',
+    replace: '',
+  },
+  {
+    id: 'by-name-point-left-behind',
+    file: 'js/migrate.js',
+    why: 'leaves a point placed by name on its zone\'s old anchor, under another zone\'s tint',
+    find: '  if (zone && before && near(p, before.p)) { place(m, { p: zone.anchor, n: zone.normal }); return; }',
+    replace: '  if (zone && before && near(p, before.p)) return;',
+  },
+  {
+    id: 'whole-head-left-on-brow',
+    file: 'js/migrate.js',
+    why: 'leaves a pre-fix whole-head point on the old spot instead of the one the registry gives',
+    find: '  if (near(p, PRE_FIX_WHOLE_HEAD_SPOT.p)) { place(m, spot); return; }',
+    replace: '',
+  },
+  {
+    id: 'whole-head-renamed-as-a-tap',
+    file: 'js/migrate.js',
+    why: 'renames a whole-head point after whatever zone it sits nearest',
+    find: '  if (zone?.virtual) return;',
+    replace: '',
+  },
+  {
+    id: 'current-points-migrated-again',
+    file: 'js/migrate.js',
+    why: 'treats a point already in the current frame as pre-fix, so a second run moves or renames it',
+    find: '  if (near(p, spot.p) || (zone?.anchor && near(p, zone.anchor))) return;',
+    replace: '',
+  },
+  {
+    id: 'second-run-moves-a-tap',
+    file: 'js/migrate.js',
+    why: 'leaves a tap on the old anchor of its new zone, which the next run reads as placed by name',
+    find: '  if (PRE_FIX_ANCHORS[named.id] && near(p, PRE_FIX_ANCHORS[named.id].p)) {\n    place(m, { p: named.anchor, n: named.normal });\n  }',
+    replace: '',
+  },
+  {
+    id: 'whole-head-spot-typed-in',
+    file: 'js/presets.js',
+    why: 'brings back the typed-in whole-head spot that stayed on the brow ridge when the zones moved',
+    find: '  return { p: [...zone.anchor], n: [...zone.normal] };',
+    replace: '  return { p: [0, 0.2, 0.95], n: [0, 0, 1] };',
   },
 ];
 

@@ -28,11 +28,11 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 
 | Module | Lines | Owns |
 |---|---:|---|
-| `js/events.js` | 480 | `initApp`, every action the UI calls |
+| `js/events.js` | 490 | `initApp`, every action the UI calls |
 | `js/conditions.js` | 379 | `CONDITIONS`, `scoreConditions`, the disclaimers |
 | `js/state.js` | 348 | the live model: `state`, episodes, pains, markers, impact |
 | `js/head3d.js` | 316 | `createHead3D`: renderer, camera, picking, zone tint |
-| `js/persist.js` | 303 | localStorage, JSON files, share-link payloads |
+| `js/persist.js` | 341 | localStorage, JSON files, share-link payloads |
 | `js/legend.js` | 269 | `buildLegend`, `legendHtml`, `drawLegendPng` |
 | `js/embed.js` | 216 | the embed's boot, URL contract and postMessage API |
 | `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
@@ -45,10 +45,12 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/panel-conditions.js` | 142 | `renderMatches`, `renderRedFlags`, `renderLibrary` |
 | `js/groups.js` | 137 | `GROUP_COLORS`, `paint`, `markerColor`, `markerPattern` |
 | `js/embed-builder.js` | 104 | the builder form and its postMessage console |
-| `js/presets.js` | 114 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
+| `js/presets.js` | 125 | `wholeHeadSpot`, `materializeSpots`, `plainEpisode`, `episodeFrom*` |
 | `js/panel-episodes.js` | 88 | `renderEpisodes` |
 | `js/picking.js` | 38 | `buildLut`, `pickZone`: the raycast, then `zoneAt` |
 | `js/zone-lookup.js` | 61 | `zoneAt`, `majoritySample`, `nearestPatch`, `texel`: the picker's lookup, no three, so Node runs it |
+| `js/zones-legacy.js` | 66 | `PRE_FIX_ANCHORS`, `PRE_FIX_WHOLE_HEAD_SPOT`: FROZEN, the zones before 2026-10-30 |
+| `js/migrate.js` | 59 | `migrateEpisode`, `isPreFix`, `ZONES_VERSION`: maps saved before the zone fix |
 | `js/panel-explain.js` | 110 | `renderExplain` |
 | `js/zoneshader.js` | 72 | `createZoneShader` |
 | `js/export.js` | 63 | JSON downloads, share URLs, the composited PNG |
@@ -109,7 +111,8 @@ against a stub.
 
 ## Data
 
-- `localStorage['headmap-v2']`
+- `localStorage['headmap-v2']`: `{ v: 2, zonesVersion: 2, episodes, activeEpisodeId, view }`. A diary
+  without `zonesVersion` was saved before the 2026-10-30 zone fix (see Gotchas).
 
 ## Conventions
 
@@ -201,6 +204,31 @@ against a stub.
   the near-vertical crown), which depends on `n` alone, so `bodyKey` still
   covers it. The `decal orientation` group in `tests/browser.html` measures the
   glyph on screen from both sides and fails at more than 5° apart.
+- **Share links are v 3 since 2026-10-30, and the app must write v 3 too.** The
+  rows did not change; the frame did. A v 2 link, a diary without `zonesVersion`
+  and a JSON file without `zonesVersion` were written against the zones before
+  the fix, so `migrateEpisode` in `js/migrate.js` moves them on every way in
+  (`loadFromStorage`, `absorbShared`, `importJson`, `loadFromUrlPayload` and
+  `episodeFromUrlPayload`, so the embed's `map=` too, all of which take the
+  registry): a point within 2e-3 of its zone's pre-fix anchor was
+  placed by name and takes the current anchor and normal, one on the pre-fix
+  whole-head spot takes today's, and any other was tapped, so it keeps p and n
+  and takes the zone `nearestPatch` names there (it agrees with the atlas on 99.5%
+  of a sphere of taps and on all 64 clinical ones). It is idempotent, and a v 3
+  link, a diary or a file with the field is never touched, because a second
+  migration moves points the person put there. A migrated diary is written back
+  with the field at once. Without a registry, pre-fix data throws rather than
+  returning false: false reads as no diary, and the next save would write over
+  it. `js/zones-legacy.js` is the pre-fix
+  frame, generated once from f8a39c1: never regenerate it from the current bake,
+  or it matches today's anchors and migrates nothing. headpain-ios builds 1 to 4
+  write v 2 links in the old frame, so its SiteLink has to write v 3 and read
+  both, and its `scripts/site-golden.mjs` must pass the registry and call
+  `wholeHeadSpot(registry)`.
+- **The whole-head spot is read from the registry, never typed in.**
+  `wholeHeadSpot(registry)` in `js/presets.js` is `forehead-upper-center`'s anchor
+  and normal. It was a constant, `[0, 0.2, 0.95]`, authored against the old bake,
+  and when the zones moved it stayed on the brow ridge with nothing failing.
 - **`base64UrlDecode` returns `null` on malformed input, it does not throw.**
   `atob` refuses any base64 whose length is 1 mod 4, which is what a share link
   losing a character to a chat client's line wrap looks like. Callers pass the
@@ -209,7 +237,8 @@ against a stub.
   reader their own diary along with the link.
 - **`defaultMarker` copies the arrays it is handed, and that is the guarantee.**
   Storing `partial.p` by reference made every whole-head point in every episode
-  share one array with the `WHOLE_HEAD_SPOT` constant: moving one moved all of
+  share one array with the `WHOLE_HEAD_SPOT` constant (now `wholeHeadSpot`, whose
+  arrays are the forehead zone's own anchor, copied): moving one moved all of
   them and corrupted the constant for the rest of the session. Two call sites
   were fixed individually before the penny dropped (`presets.js` on 2026-09-05,
   `events.js` missed until 2026-09-23), which is exactly how a third would have

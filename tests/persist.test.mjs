@@ -26,7 +26,6 @@ import { isPattern, patternAt, patternIndexOf } from '../js/patterns.js';
 import { emptyImpact } from '../js/impact.js';
 
 const zoneIndexOf = registry.zoneIndexOf;
-const zoneIdAt = registry.zoneIdAt;
 
 // A fresh live model, and nothing else. Built out of state.js's own
 // constructors rather than by calling resetToDefaults(), which is itself under
@@ -91,7 +90,7 @@ function richEpisode() {
 
 const linkRoundTrip = ep => episodeFromUrlPayload(
   JSON.parse(base64UrlDecode(base64UrlEncode(JSON.stringify(serializeForUrl(zoneIndexOf))))),
-  zoneIdAt
+  registry
 );
 
 beforeEach(freshState);
@@ -131,7 +130,7 @@ test('a note with a curly apostrophe, an emoji and CJK survives the whole share-
   assert.match(encoded, /^[A-Za-z0-9_-]+$/,
     'the payload rides in a URL hash; +, / or = would need escaping the app never does');
 
-  const back = episodeFromUrlPayload(JSON.parse(base64UrlDecode(encoded)), zoneIdAt);
+  const back = episodeFromUrlPayload(JSON.parse(base64UrlDecode(encoded)), registry);
   assert.equal(back.markers[0].note, ep.markers[0].note, 'the note came back mangled or truncated');
   assert.ok(back.markers[0].note.startsWith(note),
     'the curly apostrophe, the emoji and the CJK are the point of this test; padding must not stand in for them');
@@ -325,25 +324,25 @@ test('an episode-shaped object out of persist.js always carries a camera you can
   };
 
   for (const c of [undefined, null, 'nope', 42, [], [null, null, null], ['a', 'b', 'c'], [0, 0, 0]]) {
-    usable(episodeFromUrlPayload({ v: 2, t: 'Bad camera', c, g: [], m: [] }, zoneIdAt).camera,
+    usable(episodeFromUrlPayload({ v: 2, t: 'Bad camera', c, g: [], m: [] }, registry).camera,
       `c: ${JSON.stringify(c) ?? 'undefined'}`);
   }
   // A string indexes like an array, so reading c[0..2] off one yields three
   // characters and an angle nobody ever drew from. Compared against the
   // no-camera default rather than against literals, so this stays a claim about
   // behaviour and not a copy of the numbers in state.js.
-  const noCamera = episodeFromUrlPayload({ v: 2, t: 'No c at all', g: [], m: [] }, zoneIdAt).camera;
-  assert.deepEqual(episodeFromUrlPayload({ v: 2, t: 'Camera as text', c: '123', g: [], m: [] }, zoneIdAt).camera,
+  const noCamera = episodeFromUrlPayload({ v: 2, t: 'No c at all', g: [], m: [] }, registry).camera;
+  assert.deepEqual(episodeFromUrlPayload({ v: 2, t: 'Camera as text', c: '123', g: [], m: [] }, registry).camera,
     noCamera, 'a string is not a camera');
 
   // ...and a c[] that is fine is still honoured, so "ignore it always" is not a
   // way to pass any of this.
-  assert.equal(episodeFromUrlPayload({ v: 2, t: 'Good camera', c: [1.5, 1.1, 3.2], g: [], m: [] }, zoneIdAt).camera.dist, 3.2);
+  assert.equal(episodeFromUrlPayload({ v: 2, t: 'Good camera', c: [1.5, 1.1, 3.2], g: [], m: [] }, registry).camera.dist, 3.2);
 
   install(richEpisode());
   const json = JSON.parse(JSON.stringify(episodeToJson(state.episodes[0])));
   resetModel();
-  importJson(json);
+  importJson(json, registry);
   usable(state.episodes[0].camera, 'a JSON file carries no camera at all');
 });
 
@@ -362,7 +361,7 @@ test('a link written before pains carried patterns still gives every pain a dist
     t: 'Old link',
     g: [['Migraine', 0, ''], ['Sinus', 1, ''], ['Third', -1, ''], ['Fourth', 5, '']],
     m: []
-  }, zoneIdAt);
+  }, registry);
 
   const patterns = back.groups.map(g => g.pattern);
   assert.ok(patterns.every(isPattern), `old link produced a pattern nothing can draw: ${patterns}`);
@@ -375,14 +374,14 @@ test('a link written before pains carried patterns still gives every pain a dist
 });
 
 test('episodeFromUrlPayload refuses a payload it cannot trust rather than building half an episode', () => {
-  for (const bad of [null, undefined, {}, 'garbage', 42, [], { v: 1, g: [], m: [] }, { v: 3, g: [], m: [] }, { v: '2', g: [], m: [] }]) {
-    assert.equal(episodeFromUrlPayload(bad, zoneIdAt), null, `accepted ${JSON.stringify(bad)}`);
+  for (const bad of [null, undefined, {}, 'garbage', 42, [], { v: 1, g: [], m: [] }, { v: 4, g: [], m: [] }, { v: '2', g: [], m: [] }, { v: '3', g: [], m: [] }]) {
+    assert.equal(episodeFromUrlPayload(bad, registry), null, `accepted ${JSON.stringify(bad)}`);
   }
 });
 
 test('loadFromUrlPayload leaves the live model untouched when the payload is junk', () => {
   const before = state.episodes[0].id;
-  assert.equal(loadFromUrlPayload({ v: 1 }, zoneIdAt), false);
+  assert.equal(loadFromUrlPayload({ v: 1 }, registry), false);
   assert.equal(state.episodes[0].id, before, 'a bad hash must not wipe what is on screen');
   assert.equal(state.shared, false, 'nothing was opened, so nothing is being viewed read-only');
 });
@@ -397,7 +396,7 @@ test('a truncated marker row is dropped rather than restored with NaN coordinate
       [zoneIndexOf('temple-left'), 0, 0, 1],                                     // too short
       [zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'kept', 0]     // whole
     ]
-  }, zoneIdAt);
+  }, registry);
   assert.equal(back.markers.length, 1, 'a short row produced a marker with NaN in its position');
   assert.equal(back.markers[0].note, 'kept');
   // Across *every* restored marker, not just the one that was never at risk:
@@ -409,8 +408,10 @@ test('a truncated marker row is dropped rather than restored with NaN coordinate
 });
 
 test('a restored share link leaves no marker without a pain, even when the payload says group -1', () => {
+  // v 3, the link the app writes today: a v 2 link's taps are renamed on the way
+  // in (tests/migrate.test.mjs), and this test is about the indices and pains.
   const back = episodeFromUrlPayload({
-    v: 2,
+    v: 3,
     t: 'Loose points',
     g: [['Migraine', 0, '', 0]],
     m: [
@@ -418,7 +419,7 @@ test('a restored share link leaves no marker without a pain, even when the paylo
       [zoneIndexOf('vertex-center'), 0, 1, 0, 0, 1, 0, 4, 0, -1, 1, 'also loose', -1],
       [zoneIndexOf('temple-right'), 1, 0, 0, 1, 0, 0, 5, 0, -1, 1, 'grouped', 0]
     ]
-  }, zoneIdAt);
+  }, registry);
 
   assert.deepEqual(back.markers.map(m => m.zoneId), ['temple-left', 'vertex-center', 'temple-right'],
     'the zone index survives the trip through the registry in both directions');
@@ -451,7 +452,7 @@ test('a JSON file round-trips an episode including pattern and impact', () => {
   assert.equal(file.headmapVersion, 2);
 
   resetModel();
-  assert.equal(importJson(file), 1);
+  assert.equal(importJson(file, registry), 1);
   const back = state.episodes[0];
 
   assert.equal(back.title, 'Bad week');
@@ -494,7 +495,7 @@ test('a file naming a depth, quality or spread the app does not have falls back 
       zone: 'temple-left', position: [0, 0, 1], normal: [0, 0, 1], intensity: 6, group: 'g1',
       depth: 'sideways', quality: 'made-up', spread: 'enormous'
     }]
-  }), 1);
+  }, registry), 1);
 
   const m = state.episodes[0].markers[0];
   assert.equal(m.depth, 'surface', 'an unknown depth must land on the default, not in the model');
@@ -506,7 +507,7 @@ test('imported group ids are remapped, so a marker follows its own pain and not 
   const ep = install(richEpisode());
   const file = JSON.parse(JSON.stringify(episodeToJson(ep)));
   resetModel();
-  importJson(file);
+  importJson(file, registry);
   const back = state.episodes[0];
 
   assert.ok(back.groups.every(g => !ep.groups.some(o => o.id === g.id)),
@@ -527,7 +528,7 @@ test('an imported marker whose pain is missing from the file is adopted rather t
       { zone: 'temple-left', position: [0, 0, 1], normal: [0, 0, 1], intensity: 8, group: 'g-known' },
       { zone: 'vertex-center', position: [0, 1, 0], normal: [0, 1, 0], intensity: 2, group: 'g-vanished' }
     ]
-  });
+  }, registry);
   assert.equal(imported, 1);
   const ep = state.episodes[0];
   const ids = new Set(ep.groups.map(g => g.id));
@@ -549,7 +550,7 @@ test('importJson returns 0 for a foreign file and for a file with no markers arr
     { kind: 'headmap-episode', title: 'Wrong shape', markers: 'lots' } // markers not an array
   ];
   for (const payload of rejected) {
-    assert.equal(importJson(payload), 0, `imported ${JSON.stringify(payload)}`);
+    assert.equal(importJson(payload, registry), 0, `imported ${JSON.stringify(payload)}`);
   }
   assert.equal(state.episodes.length, before, 'a rejected file still pushed an episode');
 });
@@ -562,7 +563,7 @@ test('a whole-diary export re-imports every episode it carried', () => {
   assert.equal(file.episodes.length, 2);
 
   resetModel();
-  assert.equal(importJson(file), 2);
+  assert.equal(importJson(file, registry), 2);
   assert.deepEqual(state.episodes.slice(0, 2).map(e => e.title).sort(), ['Bad week', 'Second']);
 });
 
@@ -572,7 +573,7 @@ test('an episode with nothing filled in writes a null impact and reads back as a
 
   const file = JSON.parse(JSON.stringify(episodeToJson(ep)));
   resetModel();
-  importJson(file);
+  importJson(file, registry);
   assert.deepEqual(state.episodes[0].impact, emptyImpact(),
     'a null impact must become the empty record, not undefined');
 });
@@ -588,7 +589,7 @@ test('saveToStorage and loadFromStorage round-trip the diary, the active episode
   saveToStorage();
 
   resetModel();
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   assert.deepEqual(state.episodes.map(e => e.title), ['Bad week', 'Older']);
   assert.equal(state.activeEpisodeId, ep.id, 'the diary reopened on a different episode than it was left on');
   assert.equal(state.view, 'xray');
@@ -606,7 +607,7 @@ test('loadFromStorage refuses absent, corrupt, wrong-version and empty data with
   // every leg checks what is still on screen afterwards.
   const before = state.episodes[0].id;
   const refuses = why => {
-    assert.equal(loadFromStorage(), false, why);
+    assert.equal(loadFromStorage(registry), false, why);
     assert.equal(state.episodes.length, 1, `${why}: the live diary was replaced by a payload that was then rejected`);
     assert.equal(state.episodes[0].id, before, `${why}: what was on screen is gone`);
   };
@@ -637,7 +638,7 @@ test('a stored diary with a view the app does not have opens in the normal view,
   resetModel();
   state.view = 'xray';
   state.selectedMarkerId = 'm-from-the-session-before';
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   assert.equal(state.view, 'normal',
     'the view is a two-way switch the UI paints from; a third value leaves the toggle disagreeing with the scene');
   assert.equal(state.selectedMarkerId, null,
@@ -671,7 +672,7 @@ test('loadFromStorage falls back to the first episode when the stored active id 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
 
   resetModel();
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   assert.equal(state.activeEpisodeId, state.episodes[0].id,
     'a dangling active id leaves activeEpisode() falling through to episodes[0] anyway; make it explicit');
 });
@@ -685,7 +686,7 @@ test('opening a shared link never overwrites the local diary', () => {
     v: 2, t: 'Their map', c: [0.5, 1.2, 4], i: null,
     g: [['Theirs', 0, '', 1]],
     m: [[zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'hi', 0]]
-  }, zoneIdAt);
+  }, registry);
 
   assert.equal(opened, true);
   assert.equal(state.shared, true, 'a shared map is somebody else\'s; saving it over the diary loses episodes');
@@ -697,7 +698,7 @@ test('opening a shared link never overwrites the local diary', () => {
     'saveToStorage wrote while a shared link was open, destroying the diary underneath it');
 
   resetModel();
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   assert.equal(state.episodes[0].title, 'My diary');
   assert.equal(state.episodes[0].id, mine.id);
 });
@@ -710,9 +711,9 @@ test('absorbShared puts the stored diary back underneath the shared map, then sa
     v: 2, t: 'Their map', c: [0.5, 1.2, 4], i: null,
     g: [['Theirs', 0, '', 1]],
     m: [[zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'hi', 0]]
-  }, zoneIdAt);
+  }, registry);
 
-  absorbShared();
+  absorbShared(registry);
   assert.equal(state.shared, false, 'the map is now the user\'s to edit, so saving must resume');
   assert.deepEqual(state.episodes.map(e => e.title), ['Their map', 'My diary'],
     'the diary was not restored underneath the shared map');
@@ -735,7 +736,7 @@ test('absorbShared does not read storage at all when no shared map is open', () 
     episodes: [{ id: 'ep-stored', title: 'Deleted earlier today', groups: [], markers: [] }]
   }));
 
-  absorbShared();
+  absorbShared(registry);
   assert.deepEqual(state.episodes.map(e => e.title), ['On screen'],
     'absorbShared re-read storage while not shared and merged a diary nobody asked for');
   assert.deepEqual(state.episodes.map(e => e.id), [mine.id]);
@@ -758,10 +759,10 @@ test('absorbShared keeps the shared map when the stored diary is unreadable', ()
     loadFromUrlPayload({
       v: 2, t: 'Their map', c: [0, 1.2, 4], i: null, g: [['Theirs', 0, '', 1]],
       m: [[zoneIndexOf('temple-left'), 0, 0, 1, 0, 0, 1, 6, 0, -1, 1, 'hi', 0]]
-    }, zoneIdAt);
+    }, registry);
     localStorage.setItem(STORAGE_KEY, stored);
 
-    absorbShared();
+    absorbShared(registry);
     assert.equal(state.shared, false, `${why}: saving must resume even when there was no diary to restore`);
     assert.deepEqual(state.episodes.map(e => e.title), ['Their map'],
       `${why}: the shared map on screen was lost, or half a diary was merged into it`);
@@ -795,7 +796,7 @@ test('a pattern opened from the library is read-only too, so reading about clust
     'the library pattern was written over the diary');
 
   resetModel();
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   assert.equal(state.episodes[0].id, mine.id, 'the diary did not survive a trip to the pattern library');
 });
 
@@ -830,7 +831,7 @@ test('a stored diary from before patterns existed comes back with a distinct pat
     }]
   }));
 
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   const ep = state.episodes[0];
   const patterns = ep.groups.map(g => g.pattern);
   assert.ok(patterns.every(isPattern), `migration produced a pattern nothing can draw: ${patterns}`);
@@ -855,7 +856,7 @@ test('a stored marker with no pain is adopted on the way in, so no point renders
     }]
   }));
 
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   const ep = state.episodes[0];
   const ids = new Set(ep.groups.map(g => g.id));
   assert.ok(ep.markers.every(m => m.groupId && ids.has(m.groupId)),
@@ -881,7 +882,7 @@ test('a stored pain whose colour is off-palette is repaired instead of rendering
     }]
   }));
 
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   const colors = state.episodes[0].groups.map(g => g.color);
   assert.ok(colors.every(c => GROUP_COLORS.includes(c)),
     `hexToRgb() would choke on ${colors.find(c => !GROUP_COLORS.includes(c))}`);
@@ -899,7 +900,7 @@ test('a stored group with no id or no name is discarded and its points re-adopte
     }]
   }));
 
-  assert.equal(loadFromStorage(), true);
+  assert.equal(loadFromStorage(registry), true);
   const ep = state.episodes[0];
   assert.ok(ep.groups.every(g => g.id && typeof g.name === 'string' && g.name),
     'a pain with no id cannot be selected, isolated or deleted');
@@ -973,9 +974,9 @@ test('absorbing the local diary under a shared link does not duplicate what is a
     v: 2, episodes: [mine], activeEpisodeId: mine.id, view: 'normal'
   }));
   // Load the very same episode as if it had arrived as a share link.
-  loadFromStorage();
+  loadFromStorage(registry);
   state.shared = true;
-  absorbShared();
+  absorbShared(registry);
   const ids = state.episodes.map(e => e.id);
   assert.equal(new Set(ids).size, ids.length, `absorbShared duplicated an episode: ${JSON.stringify(ids)}`);
   assert.equal(state.episodes.filter(e => e.title === 'Mine').length, 1);

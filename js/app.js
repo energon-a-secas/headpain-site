@@ -15,9 +15,9 @@ async function boot() {
   const m = location.hash.match(/m=([A-Za-z0-9_-]+)/);
   if (m) {
     const payload = safeJsonParse(base64UrlDecode(m[1]), null);
-    if (payload) restored = loadFromUrlPayload(payload, registry.zoneIdAt);
+    if (payload) restored = loadFromUrlPayload(payload, registry);
   }
-  if (!restored) loadFromStorage();
+  if (!restored) loadFromStorage(registry);
 
   const head = createHead3D($('#stage'), registry);
   const ctx = { state, registry, head };

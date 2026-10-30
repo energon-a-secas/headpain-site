@@ -278,7 +278,7 @@ test('the payload in the hash decodes back to the same episode', () => {
   setCamera(1.2345678, 0.5, 4.2);
   const url = buildShareUrl(registry.zoneIndexOf);
   const payload = JSON.parse(base64UrlDecode(url.split('#m=')[1]));
-  const restored = episodeFromUrlPayload(payload, registry.zoneIdAt);
+  const restored = episodeFromUrlPayload(payload, registry);
 
   assert.equal(restored.title, 'Monday migraine');
   assert.deepEqual(payload.c, [1.235, 0.5, 4.2],
@@ -302,7 +302,7 @@ test('a note full of curly apostrophes and emoji survives the share link', () =>
   addMarker(marker({ zoneId: 'temple-left', note: 'It’s worse when I bend over: 偏頭痛 🤕 · ± ½' }));
 
   const url = buildShareUrl(registry.zoneIndexOf);
-  const restored = episodeFromUrlPayload(JSON.parse(base64UrlDecode(url.split('#m=')[1])), registry.zoneIdAt);
+  const restored = episodeFromUrlPayload(JSON.parse(base64UrlDecode(url.split('#m=')[1])), registry);
   assert.equal(restored.title, 'It’s back 🤕');
   assert.equal(restored.markers[0].note, 'It’s worse when I bend over: 偏頭痛 🤕 · ± ½');
 });

@@ -121,7 +121,7 @@ export function initWorkspace(ctx) {
       Object.assign(state, previousDiary);
       previousDiary = null;
       ensureActivePain();
-    } else if (!loadFromStorage()) {
+    } else if (!loadFromStorage(ctx.registry)) {
       state.episodes = [];
       createEpisode('My first map');
     }

@@ -9,8 +9,18 @@ import { CONDITIONS, presetMarkers } from './conditions.js';
 import { DEMOS } from './demos.js';
 import { GROUP_COLORS, nextGroupColor, nextGroupPattern } from './groups.js';
 
-// Where a pain with no single spot goes: high on the forehead, facing forward.
-export const WHOLE_HEAD_SPOT = { p: [0, 0.2, 0.95], n: [0, 0, 1] };
+// Where a pain with no single spot goes: the middle of the upper forehead,
+// facing the way that zone faces, so the opening camera shows it. Read from the
+// registry rather than typed in. It was a constant, [0, 0.2, 0.95], authored
+// against the bake before 2026-10-30, and when the zones moved it stayed behind
+// on the brow ridge with nothing to say so. Fresh arrays every call, so no
+// marker can alias the zone's own anchor.
+export const WHOLE_HEAD_ZONE = 'forehead-upper-center';
+
+export function wholeHeadSpot(registry) {
+  const zone = registry.zoneById(WHOLE_HEAD_ZONE);
+  return { p: [...zone.anchor], n: [...zone.normal] };
+}
 
 // Zone-based partial markers become 3D spots on this model. A zone the model
 // does not carry is skipped rather than placed somewhere plausible but wrong.
@@ -20,7 +30,7 @@ export function materializeSpots(list, registry) {
     const zone = registry.zoneById(m.zoneId);
     if (!zone) continue;
     const spot = zone.virtual || !zone.anchor
-      ? { p: [...WHOLE_HEAD_SPOT.p], n: [...WHOLE_HEAD_SPOT.n] }
+      ? wholeHeadSpot(registry)
       : { p: [...zone.anchor], n: [...zone.normal] };
     out.push({ ...m, p: spot.p, n: spot.n });
   }

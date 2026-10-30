@@ -13,7 +13,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registry } from './fixtures.mjs';
 import {
-  WHOLE_HEAD_SPOT, materializeSpots, shortName, conditionById, demoById,
+  WHOLE_HEAD_ZONE, wholeHeadSpot, materializeSpots, shortName, conditionById, demoById,
   plainEpisode, episodeFromCondition, episodeFromDemo
 } from '../js/presets.js';
 import { CONDITIONS } from '../js/conditions.js';
@@ -169,17 +169,23 @@ test('materializeSpots skips a zone this model does not carry instead of placing
 test('materializeSpots sends a virtual whole-head zone to the forehead spot, not to a missing anchor', () => {
   const [spot] = materializeSpots([{ zoneId: 'whole-head', intensity: 7 }], registry);
   assert.ok(spot, 'whole-head is a virtual zone the registry does carry; it must not be skipped');
-  // Not a literal triple. Exactly where on the forehead the spot sits is a
-  // design call, and nudging it breaks nothing this test is named for. Two
-  // things must hold instead: materializeSpots places the *exported* constant
-  // (events.js places its own whole-head points from it, so a second copy of the
-  // number here is what would let the two drift), and that constant is still a
-  // point on the front of this head. The bounds for "on this head" are read off
-  // the model's own zone anchors rather than typed in here.
-  assert.deepEqual(spot.p, WHOLE_HEAD_SPOT.p,
-    'the exported constant and the spot materializeSpots places have drifted apart; events.js places its own points from the constant');
-  assert.deepEqual(spot.n, WHOLE_HEAD_SPOT.n,
-    'the normal materializeSpots places has drifted from the exported constant; the same whole-head point would face one way from the app and another from a preset');
+  // Not a literal triple. It was one, [0, 0.2, 0.95], and when the zones moved
+  // on 2026-10-30 it stayed on the brow ridge with nothing failing. Three things
+  // must hold instead: materializeSpots places what wholeHeadSpot returns
+  // (events.js places its own whole-head points from it, so a second copy here
+  // is what would let the two drift), that is the named zone's own anchor and
+  // normal in the registry, and it is still a point on the front of this head.
+  // The bounds for "on this head" are read off the model's own zone anchors
+  // rather than typed in here.
+  const whole = wholeHeadSpot(registry);
+  assert.deepEqual(spot.p, whole.p,
+    'wholeHeadSpot and the spot materializeSpots places have drifted apart; events.js places its own points from wholeHeadSpot');
+  assert.deepEqual(spot.n, whole.n,
+    'the normal materializeSpots places has drifted from wholeHeadSpot; the same whole-head point would face one way from the app and another from a preset');
+  const home = registry.zoneById(WHOLE_HEAD_ZONE);
+  assert.ok(home && !home.virtual, `${WHOLE_HEAD_ZONE} is not a baked zone, so the whole-head spot has no anchor to sit on`);
+  assert.deepEqual([whole.p, whole.n], [home.anchor, home.normal],
+    'the whole-head spot is not read from the registry, so the next re-bake leaves it behind again');
   assert.ok(spot.p.length === 3 && spot.p.every(Number.isFinite),
     `the whole-head spot is ${JSON.stringify(spot.p)}, which is not a finite 3D point; the decal has nowhere to go`);
   const radii = registry.zones.filter(z => z.anchor).map(z => Math.hypot(...z.anchor));
@@ -215,24 +221,27 @@ test('materializeSpots copies both anchor and normal, so editing a marker cannot
     'the marker aliased the registry normal; re-orienting one point would tilt the zone for every episode');
 });
 
-// Pinned, not fixed: js/presets.js line 22 pushes the module constant itself for
-// a virtual zone (`? WHOLE_HEAD_SPOT :` where the real-zone branch spreads into
-// fresh arrays), so every whole-head marker in every episode shares one position
-// array with WHOLE_HEAD_SPOT, and events.js hands the same array to addMarker().
-// Nothing in js/ writes into marker.p today, which is why it has never shown.
-// The fix is `{ p: [...WHOLE_HEAD_SPOT.p], n: [...WHOLE_HEAD_SPOT.n] }`; this
-// test goes green the moment that lands.
+// The whole-head spot was once the module constant itself, pushed for every
+// virtual zone, so every whole-head marker in every episode shared one position
+// array with it. It is the forehead zone's anchor now, so the same aliasing
+// would move that zone for every episode as well.
 test('materializeSpots copies the whole-head spot too, so one whole-head marker cannot move every other', () => {
-  const saved = [...WHOLE_HEAD_SPOT.p];
+  const home = registry.zoneById(WHOLE_HEAD_ZONE);
+  const saved = [[...home.anchor], [...home.normal]];
   try {
     const [a] = materializeSpots([{ zoneId: 'whole-head' }], registry);
     const [b] = materializeSpots([{ zoneId: 'whole-head' }], registry);
     assert.notEqual(a.p, b.p, 'two separately materialized whole-head markers share one position array');
+    assert.notEqual(a.p, home.anchor, 'a whole-head marker holds the forehead zone\'s anchor array itself');
+    assert.notEqual(a.n, home.normal, 'a whole-head marker holds the forehead zone\'s normal array itself');
     a.p[0] = 42;
-    assert.deepEqual(b.p, saved, 'writing to one whole-head marker moved another one');
-    assert.deepEqual(WHOLE_HEAD_SPOT.p, saved, 'writing to a marker rewrote the module constant every later marker reads');
+    a.n[0] = -42;
+    assert.deepEqual(b.p, saved[0], 'writing to one whole-head marker moved another one');
+    assert.deepEqual([home.anchor, home.normal], saved, 'writing to a whole-head marker moved the zone it sits on');
+    assert.deepEqual(wholeHeadSpot(registry).p, saved[0], 'writing to a marker moved the spot every later whole-head marker reads');
   } finally {
-    WHOLE_HEAD_SPOT.p.splice(0, WHOLE_HEAD_SPOT.p.length, ...saved);
+    home.anchor.splice(0, 3, ...saved[0]);
+    home.normal.splice(0, 3, ...saved[1]);
   }
 });
 

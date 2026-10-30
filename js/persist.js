@@ -14,6 +14,7 @@ import {
   state, activeEpisode, ensureActivePain,
   defaultMarker, defaultGroup, defaultEpisode, adoptOrphans, STORAGE_KEY
 } from './state.js';
+import { ZONES_VERSION, isPreFix, migrateEpisode } from './migrate.js';
 
 // Share links carry the whole map in the URL, so they have to stop somewhere.
 // The limit is a character budget rather than a point count, because the two do
@@ -61,12 +62,18 @@ const QUALITY_IDS = ['throbbing', 'band-pressure', 'stabbing', 'burning', 'elect
 
 const round3 = n => Math.round(n * 1000) / 1000;
 
+// v 3 is v 2 with the zones fixed on 2026-10-30. The rows did not change, the
+// frame they were written in did: a v 2 link was minted against the old zones,
+// so js/migrate.js moves its points on the way in, and a v 3 link is never
+// touched. The app (headpain-ios SiteLink) reads and writes the same versions.
+const LINK_VERSION = 3;
+
 export function serializeForUrl(zoneIndexOf) {
   const ep = activeEpisode();
   if (!ep) return null;
   const groupIndex = new Map(ep.groups.map((g, i) => [g.id, i]));
   const payload = {
-    v: 2,
+    v: LINK_VERSION,
     t: ep.title,
     c: [round3(ep.camera.theta), round3(ep.camera.phi), round3(ep.camera.dist)],
     i: packImpact(ep.impact),
@@ -90,8 +97,9 @@ export function serializeForUrl(zoneIndexOf) {
   return payload;
 }
 
-export function episodeFromUrlPayload(payload, zoneIdAt) {
-  if (!payload || payload.v !== 2) return null;
+// The registry names the zone indices, and moves a v 2 link's points.
+export function episodeFromUrlPayload(payload, registry) {
+  if (!payload || (payload.v !== 2 && payload.v !== LINK_VERSION)) return null;
   const groups = (Array.isArray(payload.g) ? payload.g : [])
     .filter(r => Array.isArray(r) && typeof r[0] === 'string')
     .map((r, i, all) => defaultGroup({
@@ -105,7 +113,7 @@ export function episodeFromUrlPayload(payload, zoneIdAt) {
   const markers = (Array.isArray(payload.m) ? payload.m : [])
     .filter(r => Array.isArray(r) && r.length >= 10)
     .map(r => defaultMarker({
-      zoneId: r[0] >= 0 ? zoneIdAt(r[0]) : null,
+      zoneId: r[0] >= 0 ? registry.zoneIdAt(r[0]) : null,
       p: [r[1], r[2], r[3]].map(Number),
       n: [r[4], r[5], r[6]].map(Number),
       intensity: Number(r[7]) || 0,
@@ -120,11 +128,11 @@ export function episodeFromUrlPayload(payload, zoneIdAt) {
     ep.camera = { theta: Number(payload.c[0]) || 0, phi: Number(payload.c[1]) || Math.PI / 2, dist: Number(payload.c[2]) || 4.9 };
   }
   ep.impact = unpackImpact(payload.i);
-  return ep;
+  return payload.v === 2 ? migrateEpisode(ep, registry) : ep;
 }
 
-export function loadFromUrlPayload(payload, zoneIdAt) {
-  const ep = episodeFromUrlPayload(payload, zoneIdAt);
+export function loadFromUrlPayload(payload, registry) {
+  const ep = episodeFromUrlPayload(payload, registry);
   if (!ep) return false;
   const markers = ep.markers;
   state.episodes = [ep];
@@ -152,24 +160,33 @@ export function loadLearnEpisode(ep) {
 
 // Called before the first mutation after opening a shared link: restores any
 // locally stored episodes underneath the shared one, then normal saving resumes.
-export function absorbShared() {
+// The migration runs outside the try and before `shared` clears: if it cannot
+// run, the edit fails and saving stays blocked, rather than the diary on disk
+// reading as no diary and being saved over.
+export function absorbShared(registry) {
   if (!state.shared) return;
-  state.shared = false;
+  let stored = null, restored = [];
   try {
-    const stored = safeJsonParse(localStorage.getItem(STORAGE_KEY), null);
+    stored = safeJsonParse(localStorage.getItem(STORAGE_KEY), null);
     if (stored?.v === 2 && Array.isArray(stored.episodes)) {
       const ids = new Set(state.episodes.map(e => e.id));
-      state.episodes.push(...stored.episodes.filter(e => !ids.has(e.id)).map(normalizeEpisode));
+      restored = stored.episodes.filter(e => !ids.has(e.id)).map(normalizeEpisode);
     }
   } catch {
     // no stored diary — the shared episode becomes the diary
   }
+  if (restored.length && isPreFix(stored)) restored.forEach(ep => migrateEpisode(ep, registry));
+  state.shared = false;
+  state.episodes.push(...restored);
 }
 
 // Verbose JSON (files): human-readable field names.
+// zonesVersion says the positions are in the current zone frame; a file
+// without it is from before 2026-10-30 and is migrated on import.
 export function episodeToJson(ep) {
   return {
     headmapVersion: 2,
+    zonesVersion: ZONES_VERSION,
     kind: 'headmap-episode',
     title: ep.title,
     createdAt: ep.createdAt,
@@ -193,17 +210,21 @@ export function episodeToJson(ep) {
 export function allToJson() {
   return {
     headmapVersion: 2,
+    zonesVersion: ZONES_VERSION,
     kind: 'headmap-export',
     exportedAt: new Date().toISOString(),
     episodes: state.episodes.map(episodeToJson)
   };
 }
 
-export function importJson(payload) {
+// The file's root decides its frame: a whole-diary export is one file, written
+// at one time.
+export function importJson(payload, registry) {
   const list = payload?.kind === 'headmap-export' ? payload.episodes
     : payload?.kind === 'headmap-episode' ? [payload]
     : null;
   if (!Array.isArray(list) || !list.length) return 0;
+  const preFix = isPreFix(payload);
   let imported = 0;
   for (const raw of list) {
     if (!raw || !Array.isArray(raw.markers)) continue;
@@ -230,6 +251,7 @@ export function importJson(payload) {
       note: m.note || '',
       groupId: groupIdMap.get(m.group) || null
     }));
+    if (preFix) migrateEpisode(ep, registry);
     adoptOrphans(ep);
     state.episodes.unshift(ep);
     state.activeEpisodeId = ep.id;
@@ -270,11 +292,11 @@ function normalizeEpisode(ep) {
 
 export let storageStatus = 'idle';
 
-export function saveToStorage() {
-  if (state.shared) return; // viewing a shared link — never overwrite the local diary
+function writeDiary() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       v: 2,
+      zonesVersion: ZONES_VERSION,
       episodes: state.episodes,
       activeEpisodeId: state.activeEpisodeId,
       view: state.view
@@ -285,22 +307,35 @@ export function saveToStorage() {
   }
 }
 
-export function loadFromStorage() {
+export function saveToStorage() {
+  if (state.shared) return; // viewing a shared link: never overwrite the local diary
+  writeDiary();
+}
+
+// A diary saved before the zone fix is migrated once, here, and written back
+// with zonesVersion so it is never migrated again. The migration runs outside
+// the try: one that cannot run must throw out of the boot, not return false,
+// because false reads as no diary and the next save would write over it.
+export function loadFromStorage(registry) {
+  let payload, episodes;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const payload = safeJsonParse(raw, null);
+    payload = safeJsonParse(localStorage.getItem(STORAGE_KEY), null);
     if (!payload || payload.v !== 2 || !Array.isArray(payload.episodes) || !payload.episodes.length) return false;
-    state.episodes = payload.episodes.map(normalizeEpisode);
-    state.activeEpisodeId = state.episodes.some(e => e.id === payload.activeEpisodeId)
-      ? payload.activeEpisodeId : state.episodes[0].id;
-    state.view = payload.view === 'xray' ? 'xray' : 'normal';
-    state.selectedMarkerId = null;
-    state.isolateGroupId = null;
-    ensureActivePain();
-    storageStatus = 'saved';
-    return true;
+    episodes = payload.episodes.map(normalizeEpisode);
   } catch {
     return false;
   }
+  const preFix = isPreFix(payload);
+  if (preFix) episodes.forEach(ep => migrateEpisode(ep, registry));
+  state.episodes = episodes;
+  state.activeEpisodeId = state.episodes.some(e => e.id === payload.activeEpisodeId)
+    ? payload.activeEpisodeId : state.episodes[0].id;
+  state.view = payload.view === 'xray' ? 'xray' : 'normal';
+  state.selectedMarkerId = null;
+  state.isolateGroupId = null;
+  ensureActivePain();
+  if (preFix) writeDiary();
+  else storageStatus = 'saved';
+  return true;
 }
 
