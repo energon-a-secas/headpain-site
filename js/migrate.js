@@ -10,7 +10,7 @@
 // field it carries (zonesVersion on a diary or a file, v: 3 on a link), never
 // what its points look like.
 
-import { nearestPatch } from './zone-lookup.js';
+import { nearestPatch, claimIndex, patchCoords, patchScore } from './zone-lookup.js';
 import { wholeHeadSpot } from './presets.js';
 import { PRE_FIX_ANCHORS, PRE_FIX_WHOLE_HEAD_SPOT } from './zones-legacy.js';
 
@@ -25,6 +25,38 @@ const near = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) <= NEAR
 
 const place = (m, spot) => { m.p = [...spot.p]; m.n = [...spot.n]; };
 
+// Half a texel of skin. The atlas is 1024 texels across and the head's 842,071
+// covered texels spread over 15.65 square units, about 0.0043 a side, so a
+// point closer than this to the border between two patches reads either one,
+// depending on which texel centre and which 3x3 majority it falls under.
+const HALF_TEXEL = 0.002;
+
+// How far past the border `own` shares with `rival` a point lies, on the
+// rival's side, in units of skin: the score gap over how fast it changes.
+function pastBorder(point, own, rival) {
+  const grad = z => {
+    const { du, dv } = patchCoords(point, z);
+    return [0, 1, 2].map(c => 2 * (du * z.u[c] / z.ru + dv * z.v[c] / z.rv));
+  };
+  const a = grad(own), b = grad(rival);
+  const slope = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  return slope > 0 ? (patchScore(point, own) - patchScore(point, rival)) / slope : Infinity;
+}
+
+// The zone a tap at p reads today, without the mesh: the patch the bake's rule
+// gives p (the atlas is that rule at each texel centre), or in a gap the
+// nearest patch, as zoneAt falls back. Within half a texel of the border with
+// the zone the point already has, the atlas could read either, so the name the
+// person saw is kept: renaming there turned taps the atlas still names that
+// way into their neighbours (an ear tap into the jaw joint).
+function nameToday(p, zone, zones) {
+  const i = claimIndex(p, zones);
+  const claimed = i >= 0 ? zones[i] : null;
+  if (claimed && zone?.anchor && claimed !== zone && patchScore(p, zone) < 1 &&
+      pastBorder(p, zone, claimed) <= HALF_TEXEL) return zone;
+  return claimed || nearestPatch(p, zones);
+}
+
 function migrateMarker(m, registry, spot) {
   const p = Array.isArray(m.p) && m.p.length === 3 ? m.p.map(Number) : null;
   if (!p || !p.every(Number.isFinite)) return; // nothing to place; normalizing it is not this file's job
@@ -36,9 +68,9 @@ function migrateMarker(m, registry, spot) {
   if (zone?.virtual) return;
   const before = PRE_FIX_ANCHORS[m.zoneId];
   if (zone && before && near(p, before.p)) { place(m, { p: zone.anchor, n: zone.normal }); return; }
-  // Tapped: the point stays where the finger was, and takes the name the
-  // current zones give it there (or keeps its own where they give none).
-  const named = nearestPatch(p, registry.zones);
+  // Tapped: the point stays where the finger was, and takes the name a tap
+  // there reads today (or keeps its own where nothing does).
+  const named = nameToday(p, zone, registry.zones);
   if (!named) return;
   m.zoneId = named.id;
   // A tap on the old anchor of the zone it is now named for reads as placed by

@@ -22,6 +22,14 @@ export function wholeHeadSpot(registry) {
   return { p: [...zone.anchor], n: [...zone.normal] };
 }
 
+// Where a point placed by name goes: its zone's anchor, facing the way the
+// zone faces, or the whole-head spot for a zone with no anchor. Fresh arrays.
+export function spotOf(zone, registry) {
+  return zone.virtual || !zone.anchor
+    ? wholeHeadSpot(registry)
+    : { p: [...zone.anchor], n: [...zone.normal] };
+}
+
 // Zone-based partial markers become 3D spots on this model. A zone the model
 // does not carry is skipped rather than placed somewhere plausible but wrong.
 export function materializeSpots(list, registry) {
@@ -29,9 +37,7 @@ export function materializeSpots(list, registry) {
   for (const m of list || []) {
     const zone = registry.zoneById(m.zoneId);
     if (!zone) continue;
-    const spot = zone.virtual || !zone.anchor
-      ? wholeHeadSpot(registry)
-      : { p: [...zone.anchor], n: [...zone.normal] };
+    const spot = spotOf(zone, registry);
     out.push({ ...m, p: spot.p, n: spot.n });
   }
   return out;

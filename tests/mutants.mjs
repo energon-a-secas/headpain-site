@@ -36,7 +36,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 // A silent shrink is the failure this harness exists to prevent, so it refuses
 // to run as a smaller gate than it was built to be. Raise this with the list.
-const EXPECTED_MUTANTS = 49;
+const EXPECTED_MUTANTS = 52;
 
 const MUTANTS = [
   {
@@ -392,6 +392,27 @@ const MUTANTS = [
     why: 'leaves a tap on the old anchor of its new zone, which the next run reads as placed by name',
     find: '  if (PRE_FIX_ANCHORS[named.id] && near(p, PRE_FIX_ANCHORS[named.id].p)) {\n    place(m, { p: named.anchor, n: named.normal });\n  }',
     replace: '',
+  },
+  {
+    id: 'tap-renamed-by-nearest-patch',
+    file: 'js/migrate.js',
+    why: 'renames a pre-fix tap with the gap fallback, so an ear tap the atlas still calls the ear becomes the jaw joint',
+    find: '  const i = claimIndex(p, zones);',
+    replace: '  const i = -1;',
+  },
+  {
+    id: 'border-tap-renamed',
+    file: 'js/migrate.js',
+    why: 'renames a tap half a texel from its own zone\'s border, which the atlas still names as stored',
+    find: '      pastBorder(p, zone, claimed) <= HALF_TEXEL) return zone;',
+    replace: '      false) return zone;',
+  },
+  {
+    id: 'unplaced-file-marker-at-default',
+    file: 'js/persist.js',
+    why: 'reads a file marker with a zone and no position as a point on the nose, so a pre-fix file renames it',
+    find: '      const zone = !Array.isArray(m.position) && m.zone ? registry?.zoneById?.(m.zone) : null;',
+    replace: '      const zone = null;',
   },
   {
     id: 'whole-head-spot-typed-in',

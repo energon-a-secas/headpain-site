@@ -15,6 +15,7 @@ import {
   defaultMarker, defaultGroup, defaultEpisode, adoptOrphans, STORAGE_KEY
 } from './state.js';
 import { ZONES_VERSION, isPreFix, migrateEpisode } from './migrate.js';
+import { spotOf } from './presets.js';
 
 // Share links carry the whole map in the URL, so they have to stop somewhere.
 // The limit is a character budget rather than a point count, because the two do
@@ -240,17 +241,25 @@ export function importJson(payload, registry) {
     const ep = defaultEpisode(String(raw.title || 'Imported map'), [], groups);
     ep.createdAt = raw.createdAt || ep.createdAt;
     ep.impact = normalizeImpact(raw.impact);
-    ep.markers = raw.markers.map(m => defaultMarker({
-      zoneId: m.zone || null,
-      p: Array.isArray(m.position) ? m.position.map(Number) : [0, 0, 1],
-      n: Array.isArray(m.normal) ? m.normal.map(Number) : [0, 0, 1],
-      intensity: m.intensity,
-      depth: DEPTH_IDS.includes(m.depth) ? m.depth : 'surface',
-      quality: QUALITY_IDS.includes(m.quality) ? m.quality : null,
-      spread: SPREAD_IDS.includes(m.spread) ? m.spread : 'small',
-      note: m.note || '',
-      groupId: groupIdMap.get(m.group) || null
-    }));
+    ep.markers = raw.markers.map(m => {
+      // A marker with a zone and no position was placed by name (a file
+      // written by hand or by another tool): it goes on its zone's anchor in
+      // today's frame, which the migration leaves alone. Read as a point at
+      // the [0, 0, 1] default, the migration renamed it the bridge of the nose.
+      const zone = !Array.isArray(m.position) && m.zone ? registry?.zoneById?.(m.zone) : null;
+      const spot = zone ? spotOf(zone, registry) : null;
+      return defaultMarker({
+        zoneId: m.zone || null,
+        p: spot ? spot.p : Array.isArray(m.position) ? m.position.map(Number) : [0, 0, 1],
+        n: spot ? spot.n : Array.isArray(m.normal) ? m.normal.map(Number) : [0, 0, 1],
+        intensity: m.intensity,
+        depth: DEPTH_IDS.includes(m.depth) ? m.depth : 'surface',
+        quality: QUALITY_IDS.includes(m.quality) ? m.quality : null,
+        spread: SPREAD_IDS.includes(m.spread) ? m.spread : 'small',
+        note: m.note || '',
+        groupId: groupIdMap.get(m.group) || null
+      });
+    });
     if (preFix) migrateEpisode(ep, registry);
     adoptOrphans(ep);
     state.episodes.unshift(ep);

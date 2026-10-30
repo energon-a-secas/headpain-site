@@ -29,8 +29,11 @@ export const ZONES = [
     desc: 'Between / just above the eyebrows.' },
 
   // ── Temples & eyes ──────────────────────────────────────────────────────
+  // 0.74 across reaches back to the front of the upper ear on both sides. At
+  // 0.6 the right temple stopped short of it, and the gap read Jaw joint (R)
+  // up to 3 cm above the joint, over the temporal artery.
   { id: 'temple', label: 'Temple', group: 'eye', mirror: true,
-    hint: [1.26, 1.73, 0.95], tangent: [0, 1, 0], extents: [0.5, 0.6],
+    hint: [1.26, 1.73, 0.95], tangent: [0, 1, 0], extents: [0.5, 0.74],
     desc: 'The flat soft spot beside the eye.' },
   { id: 'behind-eye', label: 'Behind / around eye', group: 'eye', mirror: true,
     hint: [0.59, 1.76, 1.94], tangent: [1, 0, 0], extents: [0.32, 0.3],
@@ -63,8 +66,12 @@ export const ZONES = [
   { id: 'chin', label: 'Chin', group: 'face-jaw',
     hint: [-0.13, 0.03, 2.2], tangent: [1, 0, 0], extents: [0.85, 0.48],
     desc: 'The point of the chin.' },
+  // The twins sit 0.17 either side of the midline and overlap across it, so
+  // the whole upper lip down to the mouth slit is upper teeth. At 0.28 out
+  // with 0.28 across they met only at the midline, and the chin's ellipse
+  // took the middle of the upper lip.
   { id: 'upper-teeth', label: 'Upper teeth / gums', group: 'face-jaw', mirror: true, priority: 1,
-    hint: [0.19, 0.59, 2.23], tangent: [1, 0, 0], extents: [0.28, 0.18],
+    hint: [0.1, 0.58, 2.3], tangent: [1, 0, 0], extents: [0.34, 0.18],
     desc: 'Upper teeth or the gum above them.' },
 
   // ── Ears ────────────────────────────────────────────────────────────────

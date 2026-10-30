@@ -2,7 +2,9 @@
 // zone, with a 3×3 majority to de-speckle seams and the nearest-patch fallback
 // for gaps. js/picking.js raycasts and hands its hit here; tests/zones-taps
 // raycasts in Node and hands its hit to the same zoneAt, so a tap the tests pin
-// names the zone the site names.
+// names the zone the site names. claimIndex is the rule the atlas was baked
+// with (tools/bake-zones.mjs imports it), for a point with no UV to look up:
+// js/migrate.js names a saved tap with it.
 
 export function texel(lut, atlasSize, u, v) {
   const x = Math.min(atlasSize - 1, Math.max(0, Math.floor(u * atlasSize)));
@@ -23,6 +25,45 @@ export function majoritySample(lut, atlasSize, u, v) {
   }
   let best = 0, bestCount = 0;
   for (const [id, c] of counts) if (c > bestCount) { best = id; bestCount = c; }
+  return best;
+}
+
+// Which patch claims a point on the skin, by the bake's own rule: the atlas is
+// this rule asked at every texel centre (tools/bake-zones.mjs), so asking it at
+// a point says what the atlas reads there without the mesh to find the texel.
+// A patch claims a point within PATCH_DEPTH of its plane and inside its
+// ellipse; the lowest score wins, a priority step taking PRIORITY_STEP off it.
+// The arithmetic is the bake's, term for term, so the atlas does not move.
+export const PATCH_DEPTH = 0.20;
+export const PRIORITY_STEP = 0.05;
+
+// A point's place in a patch's frame: dn off its plane, du and dv across its
+// ellipse in radii.
+export function patchCoords(point, z) {
+  const px = point.x ?? point[0], py = point.y ?? point[1], pz = point.z ?? point[2];
+  const dd = [px - z.anchor[0], py - z.anchor[1], pz - z.anchor[2]];
+  return {
+    dn: dd[0] * z.normal[0] + dd[1] * z.normal[1] + dd[2] * z.normal[2],
+    du: (dd[0] * z.u[0] + dd[1] * z.u[1] + dd[2] * z.u[2]) / z.ru,
+    dv: (dd[0] * z.v[0] + dd[1] * z.v[1] + dd[2] * z.v[2]) / z.rv
+  };
+}
+
+// The score a patch gives a point, Infinity off its plane. Under 1 claims it.
+export function patchScore(point, z) {
+  const { dn, du, dv } = patchCoords(point, z);
+  if (Math.abs(dn) > PATCH_DEPTH) return Infinity;
+  return du * du + dv * dv - (z.priority || 0) * PRIORITY_STEP;
+}
+
+// The index in zones of the patch that claims a point, or -1 where none does
+// (an atlas gap).
+export function claimIndex(point, zones) {
+  let best = -1, bs = 1.0;
+  for (let i = 0; i < zones.length; i++) {
+    const s = patchScore(point, zones[i]);
+    if (s < bs) { bs = s; best = i; }
+  }
   return best;
 }
 

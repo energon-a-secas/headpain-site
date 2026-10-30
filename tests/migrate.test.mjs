@@ -15,7 +15,8 @@ import { resetShim } from './shim.mjs';
 import { baked, registry } from './fixtures.mjs';
 import { lut, raycast } from './head-mesh.mjs';
 import { PRE_FIX_LINKS } from './prefix-links.mjs';
-import { zoneAt, majoritySample } from '../js/zone-lookup.js';
+import { sphereTaps } from './prefix-taps.mjs';
+import { zoneAt, majoritySample, patchScore, PRIORITY_STEP } from '../js/zone-lookup.js';
 import { ZONES_VERSION, isPreFix, migrateEpisode } from '../js/migrate.js';
 import { PRE_FIX_ANCHORS, PRE_FIX_WHOLE_HEAD_SPOT } from '../js/zones-legacy.js';
 import { wholeHeadSpot } from '../js/presets.js';
@@ -149,6 +150,47 @@ test('a pre-fix tap stays where the finger was and takes the name the current zo
   });
 });
 
+// Every tap f8a39c1's picker could have stored, from a sphere of rays round the
+// head (tests/prefix-taps.mjs), migrated, and asked again the way a tap is.
+function migratedSphere() {
+  const taps = sphereTaps(registry).map(t => ({ ...t, hit: raycast(t.origin, t.direction) }));
+  const ep = migrateEpisode(defaultEpisode('Sphere', taps.map(t =>
+    defaultMarker({ zoneId: t.zoneId, p: t.hit.point, n: t.direction.map(v => -v) }))), registry);
+  return taps.map((t, i) => ({
+    before: t.zoneId,
+    after: ep.markers[i].zoneId,
+    today: zoneAt(lut, baked.atlasSize, registry.zones, t.hit.uv, t.hit.point)?.id ?? null,
+    at: t.hit.point
+  }));
+}
+
+test('a pre-fix tap the atlas still names the same way keeps that name', () => {
+  // Renaming with the nearest patch, a fallback for atlas gaps, turned three of
+  // these into a neighbour: an ear into the jaw joint, two midline points of
+  // the back of the head into their left twins.
+  const taps = migratedSphere();
+  assert.equal(taps.length, 2212, 'the sphere fixture lost taps');
+  const kept = taps.filter(t => t.before === t.today);
+  assert.ok(kept.length > 1000, `only ${kept.length} pre-fix taps still read the same, so this proves little`);
+  const renamed = kept.filter(t => t.after !== t.today)
+    .map(t => `${t.today} -> ${t.after} at [${t.at.map(v => v.toFixed(3))}]`);
+  assert.deepEqual(renamed, [], 'the migration renamed a tap that was already named right');
+});
+
+test('a migrated tap reads what a tap there reads today, but on a border the atlas decides', () => {
+  // The migration has no UV, so it asks the bake's rule at the point where the
+  // atlas asked it at a texel centre. They can differ only where two patches
+  // score within a priority step of each other and both claim the point.
+  const taps = migratedSphere();
+  const off = taps.filter(t => t.after !== t.today);
+  assert.ok(off.length <= taps.length / 200, `${off.length} of ${taps.length} migrated taps read something else`);
+  const notATie = off.filter(t => {
+    const a = patchScore(t.at, zone(t.after)), b = patchScore(t.at, zone(t.today));
+    return !(a < 1 && b < 1 && Math.abs(a - b) < PRIORITY_STEP);
+  }).map(t => `${t.before} -> ${t.after}, a tap reads ${t.today} at [${t.at.map(v => v.toFixed(3))}]`);
+  assert.deepEqual(notATie, []);
+});
+
 test('a pre-fix whole-head point moves to the whole-head spot the registry gives today', () => {
   const ep = episodeFromUrlPayload(decode(PRE_FIX_LINKS.taps), registry);
   const whole = ep.markers.find(m => m.note === 'everywhere');
@@ -276,6 +318,27 @@ test('exports carry zonesVersion, and only a file without it is migrated on impo
   const diary = { kind: 'headmap-export', headmapVersion: 2, episodes: [old, { ...old, title: 'Second' }] };
   assert.equal(importJson(diary, registry), 2);
   assert.ok(state.episodes.slice(0, 2).every(e => e.markers[1].zoneId === 'cheek-left'));
+});
+
+test('a file marker with a zone and no position is placed by name, on its zone', () => {
+  // Hand-written, or from another tool: the zone is all the marker says. Read
+  // as a point at a [0, 0, 1] default, a pre-fix file had both renamed the
+  // bridge of the nose.
+  const markers = [
+    { zone: 'temple-left', intensity: 7, note: 'left temple', group: 'g' },
+    { zone: 'occipital-lower-center', intensity: 5, note: 'back of head', group: 'g' },
+    { zone: 'whole-head', intensity: 3, note: 'everywhere', group: 'g' }
+  ];
+  const file = { headmapVersion: 2, kind: 'headmap-episode', title: 'Hand written', groups: [{ id: 'g', name: 'Migraine' }], markers };
+  for (const f of [file, { ...file, zonesVersion: ZONES_VERSION }]) {
+    assert.equal(importJson(f, registry), 1);
+    const [temple, back, whole] = state.episodes[0].markers;
+    assert.deepEqual(state.episodes[0].markers.map(m => m.zoneId), ['temple-left', 'occipital-lower-center', 'whole-head']);
+    assert.deepEqual([temple.p, temple.n], [zone('temple-left').anchor, zone('temple-left').normal]);
+    assert.deepEqual([back.p, back.n], [zone('occipital-lower-center').anchor, zone('occipital-lower-center').normal]);
+    assert.deepEqual([whole.p, whole.n], [wholeHeadSpot(registry).p, wholeHeadSpot(registry).n]);
+    assert.notEqual(temple.p, zone('temple-left').anchor, 'the marker aliases the zone\'s own anchor');
+  }
 });
 
 // ---------------------------------------------------------------------------

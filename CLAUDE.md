@@ -32,12 +32,12 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/conditions.js` | 379 | `CONDITIONS`, `scoreConditions`, the disclaimers |
 | `js/state.js` | 348 | the live model: `state`, episodes, pains, markers, impact |
 | `js/head3d.js` | 316 | `createHead3D`: renderer, camera, picking, zone tint |
-| `js/persist.js` | 341 | localStorage, JSON files, share-link payloads |
+| `js/persist.js` | 350 | localStorage, JSON files, share-link payloads |
 | `js/legend.js` | 269 | `buildLegend`, `legendHtml`, `drawLegendPng` |
 | `js/embed.js` | 216 | the embed's boot, URL contract and postMessage API |
 | `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
 | `js/markers.js` | 328 | `MarkerLayer`: decals, depth geometry, pattern textures |
-| `js/zones.js` | 202 | `ZONES`, `DEPTHS`, `QUALITIES`, `SPREADS`, intensity bands |
+| `js/zones.js` | 212 | `ZONES`, `DEPTHS`, `QUALITIES`, `SPREADS`, intensity bands |
 | `js/patterns.js` | 188 | `PATTERNS`, `drawPattern` (canvas), `patternSvg` (DOM) |
 | `js/impact.js` | 172 | the impact vocabulary and `impactSentences` |
 | `js/panel-impact.js` | 171 | the impact form, the prose summary, the trend strip |
@@ -45,12 +45,12 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/panel-conditions.js` | 142 | `renderMatches`, `renderRedFlags`, `renderLibrary` |
 | `js/groups.js` | 137 | `GROUP_COLORS`, `paint`, `markerColor`, `markerPattern` |
 | `js/embed-builder.js` | 104 | the builder form and its postMessage console |
-| `js/presets.js` | 125 | `wholeHeadSpot`, `materializeSpots`, `plainEpisode`, `episodeFrom*` |
+| `js/presets.js` | 131 | `wholeHeadSpot`, `spotOf`, `materializeSpots`, `plainEpisode`, `episodeFrom*` |
 | `js/panel-episodes.js` | 88 | `renderEpisodes` |
 | `js/picking.js` | 38 | `buildLut`, `pickZone`: the raycast, then `zoneAt` |
-| `js/zone-lookup.js` | 61 | `zoneAt`, `majoritySample`, `nearestPatch`, `texel`: the picker's lookup, no three, so Node runs it |
+| `js/zone-lookup.js` | 102 | `zoneAt`, `majoritySample`, `nearestPatch`, `texel`: the picker's lookup, no three, so Node runs it; `claimIndex`, `patchScore`: the bake's rule, shared with `tools/bake-zones.mjs` |
 | `js/zones-legacy.js` | 66 | `PRE_FIX_ANCHORS`, `PRE_FIX_WHOLE_HEAD_SPOT`: FROZEN, the zones before 2026-10-30 |
-| `js/migrate.js` | 59 | `migrateEpisode`, `isPreFix`, `ZONES_VERSION`: maps saved before the zone fix |
+| `js/migrate.js` | 91 | `migrateEpisode`, `isPreFix`, `ZONES_VERSION`: maps saved before the zone fix |
 | `js/panel-explain.js` | 110 | `renderExplain` |
 | `js/zoneshader.js` | 72 | `createZoneShader` |
 | `js/export.js` | 63 | JSON downloads, share URLs, the composited PNG |
@@ -195,7 +195,17 @@ against a stub.
   64 clinical taps and three grids at the mesh, reads the atlas under each hit
   and asks `zoneAt` in `js/zone-lookup.js`, the call `pickZone` makes, so a
   bake that moves a name off where a patient points fails there (47 of the 64
-  did at f8a39c1, 16 at ae3f826).
+  did at f8a39c1, 16 at ae3f826). Its grids caught two more after 91c4ec6: the
+  chin's ellipse took the middle of the upper lip (the upper teeth twins met
+  only at the midline; they now overlap across it), and the right temple
+  stopped short of the upper ear, so the gap there fell back to the nearest
+  anchor, the jaw joint, 3 cm above the joint (the temple reaches 0.74 across
+  now). A gap names whatever anchor is nearest, however small its patch, so
+  close a gap with an ellipse rather than trusting the fallback.
+- **The atlas is one rule, `claimIndex` in `js/zone-lookup.js`.**
+  `tools/bake-zones.mjs` asks it at every texel centre (a bake with the hints
+  unchanged is still byte for byte), and `js/migrate.js` asks it at a saved
+  point, which has no UV to look up. Change the rule there, never a copy.
 - **A decal's roll comes from world up, never from the shortest arc.**
   `setFromUnitVectors(+z, n)` puts a glyph upright on the forehead and rolls it
   109° on the back of the neck, so barred pains read as slashes and the arced
@@ -213,8 +223,16 @@ against a stub.
   registry): a point within 2e-3 of its zone's pre-fix anchor was
   placed by name and takes the current anchor and normal, one on the pre-fix
   whole-head spot takes today's, and any other was tapped, so it keeps p and n
-  and takes the zone `nearestPatch` names there (it agrees with the atlas on 99.5%
-  of a sphere of taps and on all 64 clinical ones). It is idempotent, and a v 3
+  and takes the name a tap there reads today: `claimIndex`, the bake's own rule,
+  at the point, or `nearestPatch` in a gap, as `zoneAt` falls back. Within half
+  a texel of the border with the zone it already has, it keeps that name, since
+  the atlas could read either there. On f8a39c1's names for a sphere of 2,212
+  taps (`tests/prefix-taps.mjs`), 2,205 come out as a tap reads today and the
+  other 7 are border ties within a priority step; renaming with `nearestPatch`
+  alone, a fallback for gaps, turned taps the atlas still named right into
+  their neighbours (an ear into the jaw joint). A file marker with a zone and no
+  position is placed by name (`spotOf`), not read as a tap at [0, 0, 1], which
+  named it the bridge of the nose. It is idempotent, and a v 3
   link, a diary or a file with the field is never touched, because a second
   migration moves points the person put there. A migrated diary is written back
   with the field at once. Without a registry, pre-fix data throws rather than

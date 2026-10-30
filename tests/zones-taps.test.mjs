@@ -152,15 +152,37 @@ test('the upper side of the neck reads as the side of the neck, on its own side'
 
 test('the strip in front of the upper ear is never the jaw joint', () => {
   // The temporal artery runs here, which is temple pain. The jaw joint sits a
-  // finger's width lower, in front of the tragus.
+  // finger's width lower, in front of the tragus. z 0.33 to 0.45 is the skin
+  // right where the top of the ear meets the head: until the temple's ellipse
+  // reached it, the right side's gap there read Jaw joint (R) up to y 1.86.
   const joint = [];
   for (const [side, at, from] of [['left', L, FROM_L], ['right', R, FROM_R]]) {
-    for (const y of [1.5, 1.6, 1.7, 1.8]) {
-      for (const z of [0.55, 0.65, 0.75]) {
+    for (const y of [1.5, 1.6, 1.65, 1.7, 1.75, 1.8]) {
+      for (const z of [0.33, 0.36, 0.38, 0.4, 0.45, 0.55, 0.65, 0.75]) {
         const named = tap(at(y, z), from);
-        if (named?.startsWith('tmj')) joint.push(`${side} y=${y} z=${z} reads ${named}`);
+        if (named !== `temple-${side}` && named !== `ear-${side}`) joint.push(`${side} y=${y} z=${z} reads ${named}`);
       }
     }
   }
-  assert.deepEqual(joint, []);
+  assert.deepEqual(joint, [], 'want the temple or the ear, on the side tapped');
+});
+
+test('the middle of the upper lip is upper teeth, from the mouth slit up, never the chin', () => {
+  // The slit is the deepest point of the midline between raw y 0.3 and 0.6;
+  // everything tapped above it is upper lip, over the upper teeth and gums.
+  // The lips are trigeminal neuralgia's V2 trigger zone, and the chin is V3.
+  // Until the upper teeth twins overlapped across the midline, the chin's
+  // ellipse took the middle of the upper lip up to y 0.575.
+  const depth = y => { const hit = raycast(toBaked([M, y, 6]), FROM_FRONT); return hit.point[2] / SC + C[2]; };
+  let slit = 0.3;
+  for (let y = 0.3; y <= 0.6; y += 0.005) if (depth(y) < depth(slit)) slit = y;
+  assert.ok(slit > 0.4 && slit < 0.47, `the mouth slit sits at raw y ${slit.toFixed(3)}, not where the scan has it`);
+  const off = [];
+  for (const dx of [-0.05, -0.025, 0, 0.025, 0.05]) {
+    for (const y of [0.48, 0.5, 0.525, 0.55, 0.575, 0.6, 0.65]) {
+      const named = tap([M + dx, y, 6], FROM_FRONT);
+      if (!named?.startsWith('upper-teeth')) off.push(`dx=${dx} y=${y} reads ${named}`);
+    }
+  }
+  assert.deepEqual(off, []);
 });

@@ -26,6 +26,7 @@ import { deflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ZONES, VIRTUAL_ZONES } from '../js/zones.js';
+import { claimIndex } from '../js/zone-lookup.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC_GLB = join(ROOT, 'assets/head-leeperrysmith.glb');
@@ -337,15 +338,9 @@ function bake() {
           w0 * P0[1] + w1 * P1[1] + w2 * P2[1],
           w0 * P0[2] + w1 * P1[2] + w2 * P2[2]
         ];
-        let best = -1, bs = 1.0;
-        for (let zi = 0; zi < zones.length; zi++) {
-          const z = zones[zi];
-          const dd = sub(P, z.anchor);
-          if (Math.abs(dot(dd, z.normal)) > 0.20) continue;
-          const du = dot(dd, z.u) / z.ru, dv = dot(dd, z.v) / z.rv;
-          const s = du * du + dv * dv - z.priority * 0.05;
-          if (s < bs) { bs = s; best = zi; }
-        }
+        // The rule js/zone-lookup.js keeps, so a saved point can be named
+        // the way its texel is.
+        const best = claimIndex(P, zones);
         const o = py * ATLAS + px;
         if (best >= 0) {
           if (idTex[o] !== 0 && idTex[o] !== best + 1) conflicts++;

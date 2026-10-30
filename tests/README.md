@@ -32,7 +32,9 @@ written against an invented zone id passes while the app renders nothing.
 raycasts the way three does, so `zones-taps` and `migrate` ask what a tap names
 on the real head. `tests/prefix-links.mjs` holds two share links minted by
 f8a39c1, the last commit before the 2026-10-30 zone fix; the browser suite loads
-it too.
+it too. `tests/prefix-taps.mjs` holds the names f8a39c1's atlas gave 2,212 taps
+from a sphere round the head, so `migrate` can ask whether each one, migrated,
+reads what a tap there reads today.
 
 One gotcha worth knowing: Node 22 and later already define `globalThis.localStorage`,
 but it is inert without `--localstorage-file` (`setItem is not a function`). The
