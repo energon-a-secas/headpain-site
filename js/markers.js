@@ -55,9 +55,28 @@ const SPIKY_QUALITIES = new Set(['electric', 'stabbing', 'ice-pick', 'sharp']);
 const DEFAULT_STYLE = { color: GROUP_COLORS[0], pattern: 'solid' };
 const XRAY_FADE = { halo: 0.2, ring: 0.2, core: 0.5, sel: 0.4 };
 const SELECTION_COLOR = new THREE.Color(0x10b981);
-const _zAxis = new THREE.Vector3(0, 0, 1);
-const _q = new THREE.Quaternion();
-const _e = new THREE.Euler();
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const BACK = new THREE.Vector3(0, 0, -1);
+const NEAR_VERTICAL = 0.95; // |n.y| past this (within about 18° of straight up or down)
+const _x = new THREE.Vector3();
+const _y = new THREE.Vector3();
+const _basis = new THREE.Matrix4();
+
+// A decal's projector looks along -n, and its texture's up is the projector's
+// +y. Turning +z onto n by the shortest arc (setFromUnitVectors) leaves +y
+// wherever that arc happens to carry it: upright on the forehead, rolled 109°
+// on the back of the neck, so a barred pain's bars read as slashes there, and
+// nearly upside down on the back of the head. Rolling the projector so its +y
+// is the world's up, as far as the surface allows, keeps every glyph upright
+// to someone facing it. A surface facing straight up or down has no such
+// direction, so it takes the back of the head as its up: on the crown that is
+// upright from the front, looking down on it. n only, so bodyKey still covers it.
+function uprightOrientation(n) {
+  const ref = Math.abs(n.y) > NEAR_VERTICAL ? BACK : WORLD_UP;
+  _x.crossVectors(ref, n).normalize();
+  _y.crossVectors(n, _x);
+  return new THREE.Euler().setFromRotationMatrix(_basis.makeBasis(_x, _y, n));
+}
 
 export class MarkerLayer {
   constructor(headMesh, parent) {
@@ -120,10 +139,8 @@ export class MarkerLayer {
 
   addDecal(marker, texture, color, size, opacity, role = 'core', collect = null) {
     const p = new THREE.Vector3(...marker.p);
-    const n = new THREE.Vector3(...marker.n);
-    _q.setFromUnitVectors(_zAxis, n);
-    _e.setFromQuaternion(_q);
-    const geom = new DecalGeometry(this.headMesh, p, _e.clone(), new THREE.Vector3(size, size, size));
+    const n = new THREE.Vector3(...marker.n).normalize();
+    const geom = new DecalGeometry(this.headMesh, p, uprightOrientation(n), new THREE.Vector3(size, size, size));
     const mat = new THREE.MeshBasicMaterial({
       map: texture,
       color,

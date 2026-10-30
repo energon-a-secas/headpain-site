@@ -599,6 +599,64 @@ await it('a full map stays interactive, which is the whole point of the cache', 
   }, zones);
 });
 
+// ── Which way up a glyph sits ───────────────────────────────────────────────
+group('decal orientation');
+
+// Each decal used to be turned onto its surface by the shortest arc from +z,
+// which keeps a glyph upright on the forehead and rolls it 109° on the back of
+// the neck, so a barred pain's bars turned into slashes there. Measured where
+// a reader sees it: project the core decal's vertices from a camera facing the
+// point, fit screen = A·uv + b over them, and read the angles of the texture's
+// own across and up on screen.
+function glyphOnScreen(body, camera) {
+  const mesh = body.root.children.find(c => c.material === body.coreMat);
+  const pos = mesh.geometry.attributes.position, uv = mesh.geometry.attributes.uv;
+  const p = camera.position.clone();
+  const rows = [];
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld).project(camera);
+    rows.push([uv.getX(i), uv.getY(i), p.x * camera.aspect, p.y]); // square pixels, so angles hold
+  }
+  const mean = rows[0].map((_, k) => rows.reduce((s, r) => s + r[k], 0) / rows.length);
+  let suu = 0, suv = 0, svv = 0, sux = 0, svx = 0, suy = 0, svy = 0;
+  for (const [u, v, x, y] of rows) {
+    const du = u - mean[0], dv = v - mean[1], dx = x - mean[2], dy = y - mean[3];
+    suu += du * du; suv += du * dv; svv += dv * dv;
+    sux += du * dx; svx += dv * dx; suy += du * dy; svy += dv * dy;
+  }
+  const det = suu * svv - suv * suv;
+  const deg = (x, y) => Math.atan2(y, x) * 180 / Math.PI;
+  return {
+    vertices: rows.length,
+    across: deg((sux * svv - svx * suv) / det, (suy * svv - svy * suv) / det),
+    up: deg((svx * suu - sux * suv) / det, (svy * suu - suy * suv) / det),
+  };
+}
+const turn = (a, b) => Math.abs(((a - b + 540) % 360) - 180);
+
+await it('a barred glyph on the back of the neck sits the same way up as one on the forehead', async () => {
+  await withPoints(async ({ hm, ep, L, bodyOf }) => {
+    hm.actions.setPainStyle(ep.groups[0].id, { pattern: 'bars' });
+    const [forehead, neck] = ep.markers;
+    const { camera } = hm.head.debugScene();
+    const seen = (marker, theta) => {
+      hm.head.setCamera(theta, Math.PI / 2, 4.9);
+      camera.updateMatrixWorld();
+      const body = bodyOf(marker.id);
+      assert.ok(body.coreMat.map === L.patternTex.get('bars'), `${marker.zoneId} is not drawing the barred glyph`);
+      return glyphOnScreen(body, camera);
+    };
+    const front = seen(forehead, 0), back = seen(neck, Math.PI);
+    assert.gt(Math.min(front.vertices, back.vertices), 11, 'too few decal vertices to fit an orientation to');
+    // The forehead from the front is the reference: bars level, glyph upright.
+    assert.ok(turn(front.across, 0) < 5 && turn(front.up, 90) < 5,
+      `the forehead glyph is off level from the front: across ${front.across.toFixed(1)}°, up ${front.up.toFixed(1)}°`);
+    assert.ok(turn(back.across, front.across) < 5 && turn(back.up, front.up) < 5,
+      `seen from behind, the neck glyph is turned ${turn(back.across, front.across).toFixed(1)}° from the forehead one ` +
+      `(across ${back.across.toFixed(1)}° vs ${front.across.toFixed(1)}°, up ${back.up.toFixed(1)}° vs ${front.up.toFixed(1)}°)`);
+  }, ['forehead-upper-center', 'neck-back-upper']);
+});
+
 // ── Comparing two patterns ──────────────────────────────────────────────────
 group('compare');
 

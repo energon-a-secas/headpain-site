@@ -36,7 +36,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 // A silent shrink is the failure this harness exists to prevent, so it refuses
 // to run as a smaller gate than it was built to be. Raise this with the list.
-const EXPECTED_MUTANTS = 33;
+const EXPECTED_MUTANTS = 35;
 
 const MUTANTS = [
   {
@@ -279,6 +279,24 @@ const MUTANTS = [
     why: 'lets an out-of-range intensity through, which breaks the colour ramp and the legend',
     find: '  if (updates.intensity !== undefined) m.intensity = Math.max(0, Math.min(10, Math.round(Number(updates.intensity))));',
     replace: '  if (updates.intensity !== undefined) m.intensity = Number(updates.intensity);',
+  },
+
+  // ── The picker's lookup, once js/zone-lookup.js let Node run it ──────────
+  // Until 2026-10-30 every face and ear zone answered a tap one feature low,
+  // and no test asked what a tap names. tests/zones-taps.test.mjs does now.
+  {
+    id: 'atlas-v-flipped',
+    file: 'js/zone-lookup.js',
+    why: 'reads the atlas upside down, the flip glTF and canvas UV origins invite',
+    find: '  const y = Math.min(atlasSize - 1, Math.max(0, Math.floor(v * atlasSize)));',
+    replace: '  const y = Math.min(atlasSize - 1, Math.max(0, Math.floor((1 - v) * atlasSize)));',
+  },
+  {
+    id: 'atlas-index-off-by-one',
+    file: 'js/zone-lookup.js',
+    why: 'names the zone after the one tapped, so every tap reads a neighbour',
+    find: '    if (index > 0) zone = zones[index - 1] || null;',
+    replace: '    if (index > 0) zone = zones[index] || null;',
   },
 ];
 

@@ -36,7 +36,7 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/legend.js` | 269 | `buildLegend`, `legendHtml`, `drawLegendPng` |
 | `js/embed.js` | 216 | the embed's boot, URL contract and postMessage API |
 | `js/editor.js` | 214 | `renderEditor`, `renderPointsList`, `renderZoneBrowser` |
-| `js/markers.js` | 310 | `MarkerLayer`: decals, depth geometry, pattern textures |
+| `js/markers.js` | 328 | `MarkerLayer`: decals, depth geometry, pattern textures |
 | `js/zones.js` | 202 | `ZONES`, `DEPTHS`, `QUALITIES`, `SPREADS`, intensity bands |
 | `js/patterns.js` | 188 | `PATTERNS`, `drawPattern` (canvas), `patternSvg` (DOM) |
 | `js/impact.js` | 172 | the impact vocabulary and `impactSentences` |
@@ -47,7 +47,8 @@ Then open http://localhost:8846. It must be served over HTTP. The app is ES modu
 | `js/embed-builder.js` | 104 | the builder form and its postMessage console |
 | `js/presets.js` | 114 | `materializeSpots`, `plainEpisode`, `episodeFrom*` |
 | `js/panel-episodes.js` | 88 | `renderEpisodes` |
-| `js/picking.js` | 85 | `buildLut`, `nearestPatch`, `pickZone` |
+| `js/picking.js` | 38 | `buildLut`, `pickZone`: the raycast, then `zoneAt` |
+| `js/zone-lookup.js` | 61 | `zoneAt`, `majoritySample`, `nearestPatch`, `texel`: the picker's lookup, no three, so Node runs it |
 | `js/panel-explain.js` | 110 | `renderExplain` |
 | `js/zoneshader.js` | 72 | `createZoneShader` |
 | `js/export.js` | 63 | JSON downloads, share URLs, the composited PNG |
@@ -187,6 +188,19 @@ against a stub.
   across the face's midline rather than x = 0, and `tests/zones-anatomy.test.mjs`
   fails if a zone leaves the side of the nose tip, chin or ear its name puts it
   on. Run it after any hint edit; the other suites only check ids and labels.
+  Anchors are not what a tap reads, though: `tests/zones-taps.test.mjs` fires
+  64 clinical taps and three grids at the mesh, reads the atlas under each hit
+  and asks `zoneAt` in `js/zone-lookup.js`, the call `pickZone` makes, so a
+  bake that moves a name off where a patient points fails there (47 of the 64
+  did at f8a39c1, 16 at ae3f826).
+- **A decal's roll comes from world up, never from the shortest arc.**
+  `setFromUnitVectors(+z, n)` puts a glyph upright on the forehead and rolls it
+  109° on the back of the neck, so barred pains read as slashes and the arced
+  glyph turns upside down on the back of the head. `uprightOrientation` in
+  `js/markers.js` builds the projector from world up (the back of the head on
+  the near-vertical crown), which depends on `n` alone, so `bodyKey` still
+  covers it. The `decal orientation` group in `tests/browser.html` measures the
+  glyph on screen from both sides and fails at more than 5° apart.
 - **`base64UrlDecode` returns `null` on malformed input, it does not throw.**
   `atob` refuses any base64 whose length is 1 mod 4, which is what a share link
   losing a character to a chat client's line wrap looks like. Callers pass the
