@@ -73,7 +73,7 @@
         <img src="energon-classic-logo.png" class="header-logo-img" alt="">
         <div class="header-title-wrap">
         <h1>HeadPain</h1>
-        <div class="header-subtitle">Map head pain, locally and privately</div>
+        <div class="header-subtitle">Show where it hurts</div>
       
         </div>
       </a>
@@ -109,23 +109,16 @@
   </header>
 
   <main id="main" class="app-frame">
-    <section class="workspace-heading" aria-labelledby="workspace-title">
-      <div class="workspace-intro">
-        <p class="eyebrow">A clearer picture of your pain</p>
-        <h2 id="workspace-title">Show where it hurts.</h2>
-        <p>Map what you feel. Keep a diary. Help someone understand.</p>
+    <div class="workspace-heading">
+      <span class="storage-status" id="storage-status" role="status" aria-live="polite" aria-atomic="true"><span class="status-dot" aria-hidden="true"></span>No account. Private to this browser.</span>
+      <div class="workspace-buttons">
+        <button type="button" class="btn btn--secondary" id="btn-new-episode"><span aria-hidden="true">+</span> New episode</button>
+        <button type="button" class="btn btn--primary" id="btn-share" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-4 4 4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+          Share map
+        </button>
       </div>
-      <div class="workspace-actions">
-        <span class="storage-status" id="storage-status" role="status" aria-live="polite" aria-atomic="true"><span class="status-dot" aria-hidden="true"></span>No account. Private to this browser.</span>
-        <div class="workspace-buttons">
-          <button type="button" class="btn btn--secondary" id="btn-new-episode"><span aria-hidden="true">+</span> New episode</button>
-          <button type="button" class="btn btn--primary" id="btn-share" disabled>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-4 4 4-4 4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
-            Share map
-          </button>
-        </div>
-      </div>
-    </section>
+    </div>
 
     <section id="share-panel" class="share-panel" aria-labelledby="share-title" hidden>
       <div><h2 id="share-title">Help someone understand.</h2><p>Share a readable map with a doctor or someone you trust. Anyone with the link can read the details you include.</p></div>

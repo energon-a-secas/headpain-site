@@ -20,7 +20,7 @@ Pain colours and glyphs retain their separate meaning. Hue and shape identify a 
 
 ## Typography
 
-Use the existing Avenir Next and system sans stack. The workspace heading is 2rem on desktop and 1.75rem on phones. Panel headings use 1.2–1.45rem; body and control text use a compact hierarchy. Form inputs use at least 16px on phones to avoid automatic zoom.
+Use the existing Avenir Next and system sans stack. The workspace has no headline of its own: the header carries the name and its one line, and the page opens on the save status, the episode actions and the map. Panel headings use 1.2–1.45rem; body and control text use a compact hierarchy. Form inputs use at least 16px on phones to avoid automatic zoom.
 
 ## Layout
 
